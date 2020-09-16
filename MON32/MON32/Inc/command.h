@@ -54,9 +54,14 @@ typedef enum {
   CMD_QUERY_TOSA_THR      = 0x19,
   CMD_SET_TOSA            = 0x1A,
   CMD_QUERY_TOSA          = 0x1B,
+  CMD_RX_PD_CALI          = 0x1C,
+  CMD_TAP_PD_CALI         = 0x1D,
   CMD_QUERY_VOLTAGE       = 0x1F,
+  CMD_QUERY_ALARM         = 0x22,
   CMD_SET_MODULATION      = 0x25,
   CMD_QUERY_MODULATION    = 0x26,
+  CMD_QUERY_STATUS        = 0x27,
+  CMD_QUERY_ALARM_HISTORY = 0x28,
   CMD_LOG_NUMBER          = 0x75,
   CMD_LOG_CONTENT         = 0x76,
   CMD_UPGRADE_MODE        = 0x80,
@@ -65,6 +70,9 @@ typedef enum {
   CMD_SOFTRESET           = 0x84,
   CMD_SET_LOG_TIME        = 0x85,
   CMD_QUERY_LOG_TIME      = 0x86,
+  CMD_QUERY_PERFORMANCE   = 0x87,
+  CMD_SET_THRESHOLD       = 0x88,
+  CMD_QUERY_THRESHOLD     = 0x89,
 
   // for test
   CMD_FOR_DEBUG           = 0x7FFF,
@@ -88,6 +96,9 @@ typedef enum {
   CMD_DEBUG_GET_TOSA_VAL  = 0x13,
   CMD_DEBUG_CAL_RX_PD     = 0x14,
   CMD_DEBUG_GET_PD        = 0x15,
+  CMD_DEBUG_SET_LP        = 0x16,
+  CMD_DEBUG_GET_SW_CHAN   = 0x17,
+  CMD_DEBUG_RESET_ALARM   = 0x18,
   CMD_DEBUG_INTER_EXP     = 0xFF,
 } CmdDebugId;
 
@@ -170,15 +181,23 @@ uint8_t Cmd_Get_IL(void);
 uint8_t Cmd_Query_Tosa_Thr(void);
 uint8_t Cmd_Set_Tosa(void);
 uint8_t Cmd_Query_Tosa(void);
+uint8_t Cmd_RX_PD_CALI(void);
+uint8_t Cmd_TAP_PD_CALI(void);
 uint8_t Cmd_Voltage(void);
+uint8_t Cmd_Query_Alarm(void);
 uint8_t Cmd_Set_Modulation(void);
 uint8_t Cmd_Query_Modulation(void);
+uint8_t Cmd_Query_Status(void);
+uint8_t Cmd_Query_Alarm_History(void);
 uint8_t Cmd_Upgrade_Init(void);
 uint8_t Cmd_Upgrade_Data(void);
 uint8_t Cmd_Upgrade_Install(void);
 uint8_t Cmd_Softreset(void);
 uint8_t Cmd_Set_Time(void);
 uint8_t Cmd_Get_Time(void);
+uint8_t Cmd_Performance(void);
+uint8_t Cmd_Set_Threshold(void);
+uint8_t Cmd_Query_Threshold(void);
 uint8_t Cmd_For_Debug(void);
 
 

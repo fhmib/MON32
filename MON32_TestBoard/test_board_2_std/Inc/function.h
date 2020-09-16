@@ -46,9 +46,14 @@ typedef enum {
   CMD_QUERY_TOSA_THR      = 0x19,
   CMD_SET_TOSA            = 0x1A,
   CMD_QUERY_TOSA          = 0x1B,
+  CMD_RX_PD_CALI          = 0x1C,
+  CMD_TAP_PD_CALI         = 0x1D,
   CMD_QUERY_VOLTAGE       = 0x1F,
+  CMD_QUERY_ALARM         = 0x22,
   CMD_SET_MODULATION      = 0x25,
   CMD_QUERY_MODULATION    = 0x26,
+  CMD_QUERY_STATUS        = 0x27,
+  CMD_QUERY_ALARM_HISTORY = 0x28,
   CMD_LOG_NUMBER          = 0x75,
   CMD_LOG_CONTENT         = 0x76,
   CMD_UPGRADE_MODE        = 0x80,
@@ -57,6 +62,9 @@ typedef enum {
   CMD_SOFTRESET           = 0x84,
   CMD_SET_LOG_TIME        = 0x85,
   CMD_QUERY_LOG_TIME      = 0x86,
+  CMD_QUERY_PERFORMANCE   = 0x87,
+  CMD_SET_THRESHOLD       = 0x88,
+  CMD_QUERY_THRESHOLD     = 0x89,
 
   // for test
   CMD_FOR_DEBUG           = 0x7FFF,
@@ -80,6 +88,9 @@ typedef enum {
   CMD_DEBUG_GET_TOSA_VAL  = 0x13,
   CMD_DEBUG_CAL_RX_PD     = 0x14,
   CMD_DEBUG_GET_PD        = 0x15,
+  CMD_DEBUG_SET_LP        = 0x16,
+  CMD_DEBUG_GET_SW_CHAN   = 0x17,
+  CMD_DEBUG_RESET_ALARM   = 0x18,
   CMD_DEBUG_INTER_EXP     = 0xFF,
 } CmdDebugId;
 
@@ -105,9 +116,14 @@ int8_t cmd_tosa(uint8_t argc, char **argv);
 int8_t set_tosa(uint8_t argc, char **argv);
 int8_t get_tosa(uint8_t argc, char **argv);
 int8_t get_tosa_thr(uint8_t argc, char **argv);
+int8_t cmd_rx_pd_cali(uint8_t argc, char **argv);
+int8_t cmd_tap_pd_cali(uint8_t argc, char **argv);
 int8_t cmd_voltage(uint8_t argc, char **argv);
 int8_t get_voltage(void);
+int8_t cmd_alarm(uint8_t argc, char **argv);
 int8_t cmd_modulation(uint8_t argc, char **argv);
+int8_t cmd_device_status(uint8_t argc, char **argv);
+int8_t cmd_history_alarm(uint8_t argc, char **argv);
 int8_t cmd_upgrade(uint8_t argc, char **argv);
 int8_t upgrade_init(void);
 int8_t upgrade_file(uint8_t verify);
@@ -116,6 +132,11 @@ int8_t cmd_reset(uint8_t argc, char **argv);
 int8_t cmd_time(uint8_t argc, char **argv);
 int8_t set_log_time(uint8_t argc, char **argv);
 int8_t get_log_time(void);
+int8_t cmd_performance(uint8_t argc, char **argv);
+int8_t cmd_threshold(uint8_t argc, char **argv);
+int8_t set_threshold(uint8_t argc, char **argv);
+int8_t get_threshold(uint8_t argc, char **argv);
+
 int8_t cmd_for_debug(uint8_t argc, char **argv);
 int8_t debug_dac(uint8_t argc, char **argv);
 int8_t debug_adc(uint8_t argc, char **argv);
@@ -136,6 +157,9 @@ int8_t debug_get_tmp_all(uint8_t argc, char **argv);
 int8_t debug_set_freq(uint8_t argc, char **argv);
 int8_t debug_spi(uint8_t argc, char **argv);
 int8_t debug_get_pd(uint8_t argc, char **argv);
+int8_t debug_set_lp(uint8_t argc, char **argv);
+int8_t debug_get_switch_channel(void);
+int8_t debug_reset_alarm(uint8_t argc, char **argv);
 int8_t debug_get_inter_exp(void);
 
 int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_buf, uint8_t *rx_len);

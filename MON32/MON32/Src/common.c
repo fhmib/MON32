@@ -293,6 +293,10 @@ osStatus_t RTOS_DAC5535_Write(uint8_t chan, uint16_t val)
   if (HAL_SPI_Transmit(&hspi3, buf, 3, 10) != HAL_OK) {
     EPT("Write DAC5535 failed, ErrorCode = %#X\n", hspi3.ErrorCode);
     THROW_LOG("Write DAC5535 failed, ErrorCode = %#X\n", hspi3.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_DAC)) {
+      THROW_LOG("DAC5535 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_DAC);
+    }
     status = osError;
   }
 
@@ -327,6 +331,10 @@ osStatus_t RTOS_DAC128S085_Write(uint8_t chan, uint16_t val, uint8_t mode)
   if (HAL_SPI_Transmit(&hspi2, buf, 2, 10) != HAL_OK) {
     EPT("Write DAC128S085 failed, ErrorCode = %#X\n", hspi2.ErrorCode);
     THROW_LOG("Write DAC128S085 failed, ErrorCode = %#X\n", hspi2.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_DAC)) {
+      THROW_LOG("DAC128S085 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_DAC);
+    }
     status = osError;
   }
   HAL_GPIO_WritePin(SPI2_CS_GPIO_Port, SPI2_CS_Pin, GPIO_PIN_SET);
@@ -347,6 +355,10 @@ void DAC5541_Write(uint16_t val)
   if (HAL_SPI_Transmit(&hspi1, buf, 2, 1) != HAL_OK) {
     EPT("Write DAC5541 failed, ErrorCode = %#X\n", hspi1.ErrorCode);
     THROW_LOG("Write DAC5541 failed, ErrorCode = %#X\n", hspi1.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_DAC)) {
+      THROW_LOG("DAC5541 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_DAC);
+    }
   }
   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
 }
@@ -390,6 +402,15 @@ osStatus_t RTOS_ADC7953_SPI4_Read(uint8_t chan, uint16_t *val)
   osMutexRelease(spi4Mutex);
 
   if (hal_status != HAL_OK) {
+    THROW_LOG("Read ADC7953_SPI4 failed, ErrorCode = %#X\n", hspi4.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI4 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
+    return osError;
+  }
+
+  if (hal_status != HAL_OK) {
     EPT("Read ADC7953_SPI4 failed, ErrorCode = %#X\n", hspi4.ErrorCode);
     return osError;
   }
@@ -397,6 +418,11 @@ osStatus_t RTOS_ADC7953_SPI4_Read(uint8_t chan, uint16_t *val)
   chan_rb = rxbuf[0] >> 4;
   if (chan_rb != chan) {
     EPT("Read ADC7953_SPI4 failed, rChanIdx != chanIdx\n");
+    THROW_LOG("Read ADC7953_SPI4 failed, rChanIdx != chanIdx\n");
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI4 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
     return osError;
   } else {
     *val = ((rxbuf[0] & 0xf) << 8) | rxbuf[1];
@@ -436,7 +462,21 @@ osStatus_t RTOS_ADC7953_SPI5_Read(uint8_t chan, uint16_t *val)
   osMutexRelease(spi5Mutex);
 
   if (hal_status != HAL_OK) {
+    THROW_LOG("Read ADC7953_SPI5 failed, ErrorCode = %#X\n", hspi5.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI5 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
+    return osError;
+  }
+
+  if (hal_status != HAL_OK) {
     EPT("Read ADC7953_SPI5 failed, ErrorCode = %#X\n", hspi5.ErrorCode);
+    THROW_LOG("Read ADC7953_SPI5 failed, rChanIdx != chanIdx\n");
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI5 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
     return osError;
   }
 
@@ -482,6 +522,15 @@ osStatus_t RTOS_ADC7953_SPI6_Read(uint8_t chan, uint16_t *val)
   osMutexRelease(spi6Mutex);
 
   if (hal_status != HAL_OK) {
+    THROW_LOG("Read ADC7953_SPI6 failed, ErrorCode = %#X\n", hspi6.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI6 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
+    return osError;
+  }
+
+  if (hal_status != HAL_OK) {
     EPT("Read ADC7953_SPI6 failed, ErrorCode = %#X\n", hspi6.ErrorCode);
     return osError;
   }
@@ -489,6 +538,11 @@ osStatus_t RTOS_ADC7953_SPI6_Read(uint8_t chan, uint16_t *val)
   chan_rb = rxbuf[0] >> 4;
   if (chan_rb != chan) {
     EPT("Read ADC7953_SPI6 failed, rChanIdx != chanIdx\n");
+    THROW_LOG("Read ADC7953_SPI6 failed, rChanIdx != chanIdx\n");
+    if (!Is_Flag_Set(&run_status.exp, EXP_ADC_1)) {
+      THROW_LOG("ADC7953_SPI6 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_ADC_1);
+    }
     return osError;
   } else {
     *val = ((rxbuf[0] & 0xf) << 8) | rxbuf[1];

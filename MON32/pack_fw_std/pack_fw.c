@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	}
 
 	sprintf(pn, "34100268");
-	sprintf(hw, "H1.1");
+	sprintf(hw, "H1.-");
 	printf("Please input software version:");
 	scanf("%s", buf);
 	sprintf(d_name, "34100268_MON32_hw%s_fw%s.bin", hw, buf);

@@ -56,10 +56,14 @@ extern uint8_t reset_flag;
 extern uint8_t flash_in_use;
 extern RunTimeStatus run_status;
 
+extern AlarmHistoryState history_alarm_status;
+
 extern TosaCalData tosa_table[];
 extern uint8_t tosa_table_count;
 extern double tosa_power_high_max_thr;
 extern double tosa_power_low_min_thr;
+
+extern uint8_t device_busy;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -90,6 +94,7 @@ extern double tosa_power_low_min_thr;
 
 #define RUN_MAGIC                 0xA5A55A5A
 #define UPGRADE_MAGIC             0xA5A55A5A
+#define ALARM_MAGIC               0xA5A55A5A
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

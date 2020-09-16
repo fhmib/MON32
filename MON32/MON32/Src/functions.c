@@ -73,6 +73,115 @@ osStatus_t Reset_Up_Status()
   return RTOS_EEPROM_Write(EEPROM_ADDR, EE_UP_MAGIC, buf, sizeof(buf));
 }
 
+osStatus_t Get_Threshold_Table(ThresholdStruct *table)
+{
+  table->vol_3_3_high_alarm = 3.3 * 1.06;
+  table->vol_3_3_high_clear = 3.3 * 1.05;
+  table->vol_3_3_low_alarm = 3.3 * 0.94;
+  table->vol_3_3_low_clear = 3.3 * 0.95;
+
+  table->vol_4_4_high_alarm = 4.4 * 1.06;
+  table->vol_4_4_high_clear = 4.4 * 1.05;
+  table->vol_4_4_low_alarm = 4.4 * 0.94;
+  table->vol_4_4_low_clear = 4.4 * 0.95;
+
+  table->vol_5_0_high_alarm = 5 * 1.06;
+  table->vol_5_0_high_clear = 5 * 1.05;
+  table->vol_5_0_low_alarm = 5 * 0.94;
+  table->vol_5_0_low_clear = 5 * 0.95;
+
+  table->vol_61_0_high_alarm = 64 * 1.06;
+  table->vol_61_0_high_clear = 64 * 1.05;
+  table->vol_61_0_low_alarm = 64 * 0.94;
+  table->vol_61_0_low_clear = 64 * 0.95;
+
+  table->temp_high_alarm = 85 * 1.01;
+  table->temp_high_clear = 85 * 1.00;
+  table->temp_low_alarm = -10 * 1.01;
+  table->temp_low_clear = -10 * 1.00;
+
+  table->tec_cur_high_alarm = 4000 * 1.01;
+  table->tec_cur_high_clear = 4000 * 1.00;
+  table->tec_cur_low_alarm = -4000 * 1.01;
+  table->tec_cur_low_clear = -4000 * 1.00;
+
+  table->tec_vol_high_alarm = 4000 * 1.01;
+  table->tec_vol_high_clear = 4000 * 1.00;
+  table->tec_vol_low_alarm = -4000 * 1.01;
+  table->tec_vol_low_clear = -4000 * 1.00;
+
+  return osOK;
+}
+
+osStatus_t Get_EEPROM_Alarm_Status(AlarmHistoryState *alarm)
+{
+  osStatus_t status;
+  uint8_t buf[6];
+
+  status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_ALARM_MAGIC, buf, sizeof(buf));
+  if (status != osOK) {
+    return status;
+  }
+
+  alarm->magic = Buffer_To_BE32(&buf[0]);
+  if (alarm->magic != ALARM_MAGIC) {
+    alarm->magic = ALARM_MAGIC;
+    alarm->start = 0;
+    alarm->end = 0;
+    return Update_EEPROM_Alarm_Status(alarm);
+  } else {
+    alarm->start = buf[4];
+    alarm->end = buf[5];
+  }
+
+  return status;
+}
+
+osStatus_t Update_EEPROM_Alarm_Status(AlarmHistoryState *alarm)
+{
+  uint8_t buf[6];
+
+  BE32_To_Buffer(alarm->magic, &buf[0]);
+  buf[4] = alarm->start;
+  buf[5] = alarm->end;
+
+  return RTOS_EEPROM_Write(EEPROM_ADDR, EE_ALARM_MAGIC, buf, sizeof(buf));
+}
+
+osStatus_t Reset_EEPROM_Alarm_Status()
+{
+  uint8_t buf[4] = {0};
+
+  history_alarm_status.magic = 0;
+  return RTOS_EEPROM_Write(EEPROM_ADDR, EE_ALARM_MAGIC, buf, sizeof(buf));
+}
+
+osStatus_t Update_History_Alarm(uint32_t exp)
+{
+  uint8_t buf[4];
+  osStatus_t status;
+
+  if (history_alarm_status.magic != ALARM_MAGIC) {
+    return osError;
+  }
+
+  if (history_alarm_status.start == 0) {
+    history_alarm_status.start = 1;
+    history_alarm_status.end = 1;
+  } else if (history_alarm_status.end < history_alarm_status.start || history_alarm_status.end == 10) {
+    history_alarm_status.end = (history_alarm_status.end % 10) + 1;
+    history_alarm_status.start = (history_alarm_status.end % 10) + 1;
+  } else {
+    history_alarm_status.end = (history_alarm_status.end % 10) + 1;
+  }
+  
+  BE32_To_Buffer(run_status.exp, buf);
+  status = RTOS_EEPROM_Write(EEPROM_ADDR, EE_ALARM_HISTORY + (history_alarm_status.end - 1) * 4, buf, sizeof(buf));
+  status |= Update_EEPROM_Alarm_Status(&history_alarm_status);
+
+  return status;
+}
+
 uint8_t Get_Switch_Position_By_IO(uint8_t switch_channel)
 {
   uint8_t val = 0;
@@ -194,7 +303,7 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
 
   // first switch
   if (switch_channel == TX_SWITCH_CHANNEL) {
-    if (switch_pos < 32) {
+    if (switch_pos < 32 || switch_pos == 64) {
       addr = channel_map[index].first_eeprom_addr + index * 8;
     } else {
       addr = channel_map[index].first_eeprom_addr + 3 * 8 + index * 8;
@@ -279,7 +388,7 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
 
   first_switch = channel_map[index].first_switch;
   if (switch_channel == TX_SWITCH_CHANNEL) {
-    if (pos < 32) {
+    if (pos < 32 || pos == 64) {
       addr = channel_map[index].first_eeprom_addr + index * 8;
     } else {
       addr = channel_map[index].first_eeprom_addr + 3 * 8 + index * 8;
@@ -364,6 +473,49 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   } else {
     return run_status.rx_switch_channel;
   }
+}
+
+int8_t Get_Current_Switch_ADC(uint8_t switch_channel, int16_t *x1, int16_t *y1, int16_t *x2, int16_t *y2)
+{
+  int32_t index;
+  uint8_t first_switch, second_switch;
+  uint16_t px, nx, py, ny;
+  uint8_t pos;
+  
+  if (switch_channel == TX_SWITCH_CHANNEL) {
+    pos = run_status.tx_switch_channel;
+  } else if (switch_channel == RX_SWITCH_CHANNEL) {
+    pos = run_status.rx_switch_channel;
+  } else {
+    return -1;
+  }
+
+  first_switch = switch_channel == TX_SWITCH_CHANNEL ? SWITCH_NUM_1 : SWITCH_NUM_5;
+  if (Get_Switch_Adc(first_switch, &px, &nx, &py, &ny)) {
+    return -2;
+  }
+  *x1 = (int16_t)px + (int16_t)nx;
+  *y1 = (int16_t)py + (int16_t)ny;
+
+  if (pos == 0xFF) {
+    *x2 = 0;
+    *y2 = 0;
+    return 0;
+  }
+
+  index = Get_Index_Of_Channel_Map(switch_channel, pos);
+  if (index < 0) {
+    return -3;
+  }
+
+  second_switch = channel_map[index].second_switch;
+  if (Get_Switch_Adc(second_switch, &px, &nx, &py, &ny)) {
+    return -4;
+  }
+  *x2 = (int16_t)px + (int16_t)nx;
+  *y2 = (int16_t)py + (int16_t)ny;
+
+  return 0;
 }
 
 int8_t Clear_Switch_Dac(uint32_t switch_id)
@@ -672,11 +824,11 @@ void update_tosa_table(void)
       break;
     }
     val = Buffer_To_BE32(buf + 4);
-    if (val >> 12) {
+    if (val == 0 || val >> 12) {
       break;
     }
     val = Buffer_To_BE32(buf + 8);
-    if (val >> 12) {
+    if (val == 0 || val >> 12) {
       break;
     }
     tosa_table[i].tosa_dac = (uint16_t)Buffer_To_BE32(buf);
@@ -684,7 +836,7 @@ void update_tosa_table(void)
     tosa_table[i].tap_adc = (uint16_t)Buffer_To_BE32(buf + 8);
     val = (int32_t)Buffer_To_BE32(buf + 12);
     tosa_table[i].tap_power = (double)val / 100;
-    if (tosa_table[i].tap_power > 5 || tosa_table[i].tap_power < -15) {
+    if (tosa_table[i].tap_power > 10 || tosa_table[i].tap_power < -20) {
       break;
     }
   }
@@ -756,6 +908,58 @@ TosaCalData Cal_Tosa_Data(TosaCalData tosa_node_1, TosaCalData tosa_node_2, doub
   tosa_data.tec_dac = (uint16_t)(y + 0.5);
   
   return tosa_data;
+}
+
+uint8_t cal_tap_pd_by_power(uint16_t *adc, double power)
+{
+  double d_val;
+  uint16_t adc1, adc2;
+  double power1, power2;
+  uint8_t dst, offset;
+
+
+  d_val = power;
+
+  if (tosa_table_count < 2) {
+    return 2;
+  }
+
+  power1 = tosa_table[0].tap_power;
+  power2 = tosa_table[1].tap_power;
+  if (power1 > power2) {
+    dst = 1;
+  } else if (power1 < power2) {
+    dst = 0;
+  } else {
+    return 3;
+  }
+
+  offset = 1;
+  if (dst) {
+    while ((power2 = tosa_table[offset].tap_power) > d_val) {
+      if (offset > tosa_table_count - 2)
+        break;
+      ++offset;
+      power1 = power2;
+    }
+  } else {
+    while ((power2 = tosa_table[offset].tap_power) < d_val) {
+      if (offset > tosa_table_count - 2)
+        break;
+      ++offset;
+      power1 = power2;
+    }
+  }
+  adc1 = tosa_table[offset - 1].tap_adc;
+  adc2 = tosa_table[offset].tap_adc;
+
+  if (adc1 == adc2 || power1 == power2) {
+    return 4;
+  }
+
+  *adc = (uint16_t)(int16_t)((d_val - power1) * ((double)(int16_t)adc2 - (double)(int16_t)adc1) / (power2 - power1) + (double)(int16_t)adc1);
+
+  return 0;
 }
 
 uint8_t get_tap_pd_power(uint16_t *adc, double *power)
@@ -889,6 +1093,393 @@ uint8_t get_rx_pd_power(uint16_t *adc, double *power)
 
   *adc = u_val;
   *power = (u_val - (uint16_t)adc1) * (power2 - power1) / ((uint16_t)adc2 - (uint16_t)adc1) + power1;
+
+  return 0;
+}
+
+uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
+{
+  osStatus_t status;
+  double d_val, d_val_2;
+  uint8_t buf[4];
+  int32_t val32;
+  int16_t val16_1, val16_2, val16_3, val16_4;
+  uint8_t u_val8;
+  uint16_t u_val16;
+
+  switch (per_id) {
+    case 0:
+      BE32_To_Buffer(0x80000000, pBuf);
+      break;
+    case 1:
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &u_val16);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        d_val = Cal_Tosa_Temp(u_val16);
+        if (d_val >= 0) {
+          val32 = (int32_t)(d_val * 10 + 0.5);
+        } else {
+          val32 = (int32_t)(d_val * 10 - 0.5);
+        }
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 2:
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_CURRENT_CHANNEL, &u_val16);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        d_val = (double)u_val16 / 4096 * 2.5;
+        d_val = (d_val - 1.25) / 0.285 * 1000;
+        if (d_val >= 0) {
+          val32 = (int32_t)(d_val + 0.5);
+        } else {
+          val32 = (int32_t)(d_val - 0.5);
+        }
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 3:
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_VOLTAGE_CHANNEL, &u_val16);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        d_val = (double)u_val16 / 4096 * 2.5;
+        d_val = (d_val - 1.25) / 0.25 * 1000;
+        if (d_val >= 0) {
+          val32 = (int32_t)(d_val + 0.5);
+        } else {
+          val32 = (int32_t)(d_val - 0.5);
+        }
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 4:
+      BE32_To_Buffer(0x80000000, pBuf);
+      break;
+    case 5:
+      if (run_status.tosa_enable) {
+        BE32_To_Buffer(1, pBuf);
+      } else {
+        BE32_To_Buffer(0, pBuf);
+      }
+      break;
+    case 6:
+      if (run_status.tosa_enable && HAL_GPIO_ReadPin(TMPGD_GPIO_Port,TMPGD_Pin) == GPIO_PIN_SET) {
+        BE32_To_Buffer(1, pBuf);
+      } else {
+        BE32_To_Buffer(0, pBuf);
+      }
+      break;
+    case 7:
+      if (run_status.tosa_enable)
+        BE32_To_Buffer(1, pBuf);
+      else
+        BE32_To_Buffer(0, pBuf);
+      break;
+    case 8:
+      if (run_status.modulation)
+        BE32_To_Buffer(1, pBuf);
+      else
+        BE32_To_Buffer(0, pBuf);
+      break;
+    case 9:
+      u_val8 = get_tap_pd_power(&u_val16, &d_val);
+      if (u_val8 == 1) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else if (u_val8 > 1) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        if (d_val >= 0) {
+          val32 = (int32_t)(d_val * 100 + 0.5);
+        } else {
+          val32 = (int32_t)(d_val * 100 - 0.5);
+        }
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 0xA:
+      u_val8 = get_rx_pd_power(&u_val16, &d_val);
+      if (u_val8 == 1) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else if (u_val8 > 1) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        if (d_val >= 0) {
+          val32 = (int32_t)(d_val * 100 + 0.5);
+        } else {
+          val32 = (int32_t)(d_val * 100 - 0.5);
+        }
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 0xB:
+      if (Get_Current_Switch_ADC(TX_SWITCH_CHANNEL, &val16_1, &val16_2, &val16_3, &val16_4)) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        BE16_To_Buffer(val16_1, pBuf);
+        BE16_To_Buffer(val16_3, pBuf + 2);
+      }
+      break;
+    case 0xC:
+      if (Get_Current_Switch_ADC(TX_SWITCH_CHANNEL, &val16_1, &val16_2, &val16_3, &val16_4)) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        BE16_To_Buffer(val16_2, pBuf);
+        BE16_To_Buffer(val16_4, pBuf + 2);
+      }
+      break;
+    case 0xD:
+      if (Get_Current_Switch_ADC(RX_SWITCH_CHANNEL, &val16_1, &val16_2, &val16_3, &val16_4)) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        BE16_To_Buffer(val16_1, pBuf);
+        BE16_To_Buffer(val16_3, pBuf + 2);
+      }
+      break;
+    case 0xE:
+      if (Get_Current_Switch_ADC(RX_SWITCH_CHANNEL, &val16_1, &val16_2, &val16_3, &val16_4)) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        BE16_To_Buffer(val16_2, pBuf);
+        BE16_To_Buffer(val16_4, pBuf + 2);
+      }
+      break;
+    case 0xF:
+      if (run_status.tx_block || run_status.tx_switch_channel >= 64) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        u_val8 = get_tap_pd_power(&u_val16, &d_val);
+        if (u_val8 == 1) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+          BE32_To_Buffer(0x80000000, pBuf);
+        } else if (u_val8 > 1) {
+          BE32_To_Buffer(0x80000000, pBuf);
+        } else {
+          status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + run_status.tx_switch_channel * 4 + 2, buf, 2);
+          d_val_2 = (double)(int16_t)Buffer_To_BE16(buf) / 100;
+          d_val = d_val - d_val_2;
+          if (d_val >= 0) {
+            val32 = (int32_t)(d_val * 100 + 0.5);
+          } else {
+            val32 = (int32_t)(d_val * 100 - 0.5);
+          }
+          BE32_To_Buffer(val32, pBuf);
+        }
+      }
+      break;
+    case 0x10:
+      if (run_status.rx_switch_channel >= 32) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        u_val8 = get_rx_pd_power(&u_val16, &d_val);
+        if (u_val8 == 1) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+          BE32_To_Buffer(0x80000000, pBuf);
+        } else if (u_val8 > 1) {
+          BE32_To_Buffer(0x80000000, pBuf);
+        } else {
+          status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + run_status.rx_switch_channel * 4 + 2, buf, 2);
+          d_val_2 = (double)(int16_t)Buffer_To_BE16(buf) / 100;
+          d_val = d_val + d_val_2;
+          if (d_val >= 0) {
+            val32 = (int32_t)(d_val * 100 + 0.5);
+          } else {
+            val32 = (int32_t)(d_val * 100 - 0.5);
+          }
+          BE32_To_Buffer(val32, pBuf);
+        }
+      }
+      break;
+    case 0x11:
+      if (run_status.tx_block || run_status.tx_switch_channel >= 64) {
+        val32 = -60 * 100;
+        BE32_To_Buffer(val32, pBuf);
+      } else {
+        status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + run_status.tx_switch_channel * 4 + 2, buf, 2);
+        val32 = (int32_t)(int16_t)Buffer_To_BE16(buf);
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    case 0x12:
+      if (run_status.rx_switch_channel >= 32) {
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + run_status.rx_switch_channel * 4 + 2, buf, 2);
+        val32 = (int32_t)(int16_t)Buffer_To_BE16(buf);
+        BE32_To_Buffer(val32, pBuf);
+      }
+      break;
+    default:
+      return 1;
+  }
+
+  return 0;
+}
+
+uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
+{
+  switch (alarm_id) {
+    case 0:
+      run_status.thr_table.temp_low_alarm = (double)val32_low / 10;
+      if (run_status.thr_table.temp_low_alarm < 0)
+        run_status.thr_table.temp_low_clear = run_status.thr_table.temp_low_alarm * 0.99;
+      else
+        run_status.thr_table.temp_low_clear = run_status.thr_table.temp_low_alarm * 1.01;
+
+      run_status.thr_table.temp_high_alarm = (double)val32_high / 10;
+      if (run_status.thr_table.temp_high_alarm < 0)
+        run_status.thr_table.temp_high_clear = run_status.thr_table.temp_high_alarm * 1.01;
+      else
+        run_status.thr_table.temp_high_clear = run_status.thr_table.temp_high_alarm * 0.99;
+      break;
+    case 1:
+      break;
+    case 2:
+      break;
+    case 3:
+      run_status.thr_table.tec_cur_low_alarm = (double)val32_low;
+      if (run_status.thr_table.tec_cur_low_alarm < 0)
+        run_status.thr_table.tec_cur_low_clear = run_status.thr_table.tec_cur_low_alarm * 0.99;
+      else
+        run_status.thr_table.tec_cur_low_clear = run_status.thr_table.tec_cur_low_alarm * 1.01;
+
+      run_status.thr_table.tec_cur_high_alarm = (double)val32_high;
+      if (run_status.thr_table.tec_cur_high_alarm < 0)
+        run_status.thr_table.tec_cur_high_clear = run_status.thr_table.tec_cur_high_alarm * 1.01;
+      else
+        run_status.thr_table.tec_cur_high_clear = run_status.thr_table.tec_cur_high_alarm * 0.99;
+      break;
+    case 4:
+      run_status.thr_table.tec_vol_low_alarm = (double)val32_low;
+      if (run_status.thr_table.tec_vol_low_alarm < 0)
+        run_status.thr_table.tec_vol_low_clear = run_status.thr_table.tec_vol_low_alarm * 0.99;
+      else
+        run_status.thr_table.tec_vol_low_clear = run_status.thr_table.tec_vol_low_alarm * 1.01;
+
+      run_status.thr_table.tec_vol_high_alarm = (double)val32_high;
+      if (run_status.thr_table.tec_vol_high_alarm < 0)
+        run_status.thr_table.tec_vol_high_clear = run_status.thr_table.tec_vol_high_alarm * 1.01;
+      else
+        run_status.thr_table.tec_vol_high_clear = run_status.thr_table.tec_vol_high_alarm * 0.99;
+      break;
+    case 5:
+      run_status.thr_table.vol_5_0_low_alarm = (double)val32_low / 100;
+      run_status.thr_table.vol_5_0_low_clear = run_status.thr_table.vol_5_0_low_alarm * 1.01;
+
+      run_status.thr_table.vol_5_0_high_alarm = (double)val32_high / 100;
+      run_status.thr_table.vol_5_0_high_clear = run_status.thr_table.vol_5_0_high_alarm * 0.99;
+      break;
+    case 6:
+      run_status.thr_table.vol_3_3_low_alarm = (double)val32_low / 100;
+      run_status.thr_table.vol_3_3_low_clear = run_status.thr_table.vol_3_3_low_alarm * 1.01;
+
+      run_status.thr_table.vol_3_3_high_alarm = (double)val32_high / 100;
+      run_status.thr_table.vol_3_3_high_clear = run_status.thr_table.vol_3_3_high_alarm * 0.99;
+      break;
+    case 7:
+      run_status.thr_table.vol_4_4_low_alarm = (double)val32_low / 100;
+      run_status.thr_table.vol_4_4_low_clear = run_status.thr_table.vol_4_4_low_alarm * 1.01;
+
+      run_status.thr_table.vol_4_4_high_alarm = (double)val32_high / 100;
+      run_status.thr_table.vol_4_4_high_clear = run_status.thr_table.vol_4_4_high_alarm * 0.99;
+      break;
+    case 8:
+      run_status.thr_table.vol_61_0_low_alarm = (double)val32_low / 100;
+      run_status.thr_table.vol_61_0_low_clear = run_status.thr_table.vol_61_0_low_alarm * 1.01;
+
+      run_status.thr_table.vol_61_0_high_alarm = (double)val32_high / 100;
+      run_status.thr_table.vol_61_0_high_clear = run_status.thr_table.vol_61_0_high_alarm * 0.99;
+      break;
+    case 9:
+      break;
+    case 10:
+      break;
+    default:
+      return 1;
+  }
+
+  return 0;
+}
+
+uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf)
+{
+  int32_t val32;
+
+  switch (alarm_id) {
+    case 0:
+      if (run_status.thr_table.temp_low_alarm < 0)
+        val32 = (int32_t)(run_status.thr_table.temp_low_alarm * 10 - 0.5);
+      else
+        val32 = (int32_t)(run_status.thr_table.temp_low_alarm * 10 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      if (run_status.thr_table.temp_high_alarm < 0)
+        val32 = (int32_t)(run_status.thr_table.temp_high_alarm * 10 - 0.5);
+      else
+        val32 = (int32_t)(run_status.thr_table.temp_high_alarm * 10 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 1:
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      break;
+    case 2:
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      break;
+    case 3:
+      val32 = (int32_t)run_status.thr_table.tec_cur_low_alarm;
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)run_status.thr_table.tec_cur_high_alarm;
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 4:
+      val32 = (int32_t)run_status.thr_table.tec_vol_low_alarm;
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)run_status.thr_table.tec_vol_high_alarm;
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 5:
+      val32 = (int32_t)(run_status.thr_table.vol_5_0_low_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)(run_status.thr_table.vol_5_0_high_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 6:
+      val32 = (int32_t)(run_status.thr_table.vol_3_3_low_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)(run_status.thr_table.vol_3_3_high_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 7:
+      val32 = (int32_t)(run_status.thr_table.vol_4_4_low_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)(run_status.thr_table.vol_4_4_high_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 8:
+      val32 = (int32_t)(run_status.thr_table.vol_61_0_low_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      val32 = (int32_t)(run_status.thr_table.vol_61_0_high_alarm * 100 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
+      break;
+    case 9:
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      break;
+    case 10:
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      break;
+    default:
+      return 1;
+  }
 
   return 0;
 }
@@ -1377,42 +1968,42 @@ uint8_t debug_get_tosa_tmp()
   uint16_t value;
   double temp;
 
-  status = RTOS_ADC7953_SPI5_Read(0, &value);
+  status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &value);
   temp = Cal_Tosa_Temp(value);
   EPT("Temperature = %lf\n", temp);
   BE32_To_Buffer((uint32_t)value, resp_buf.buf);
   value = (uint16_t)(int16_t)(temp * 100);
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 4);
 
-  status |= RTOS_ADC7953_SPI5_Read(1, &value);
+  status |= RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_VOLTAGE_CHANNEL, &value);
   temp = (double)value / 4096 * 2.5;
   temp = (temp - 1.25) / 0.25 * 1000;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 8);
   value = (uint16_t)(int16_t)temp;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 12);
 
-  status |= RTOS_ADC7953_SPI5_Read(2, &value);
+  status |= RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_CURRENT_CHANNEL, &value);
   temp = (double)value / 4096 * 2.5;
   temp = (temp - 1.25) / 0.285 * 1000;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 16);
   value = (uint16_t)(int16_t)temp;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 20);
 
-  status |= RTOS_ADC7953_SPI5_Read(3, &value);
+  status |= RTOS_ADC7953_SPI5_Read(TEC_ADC_LD_CURRENT_CHANNEL, &value);
   temp = (double)value / 4096 * 2.5;
   temp = temp / 22 * 1000;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 24);
   value = (uint16_t)(int16_t)temp;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 28);
 
-  status |= RTOS_ADC7953_SPI5_Read(4, &value);
+  status |= RTOS_ADC7953_SPI5_Read(TEC_ADC_LD_VOLTAGE_CHANNEL, &value);
   temp = (double)value / 4096 * 2.5;
   temp = (3.3 - temp * 2) * 1000;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 32);
   value = (uint16_t)(int16_t)temp;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 36);
 
-  status |= RTOS_ADC7953_SPI5_Read(5, &value);
+  status |= RTOS_ADC7953_SPI5_Read(TEC_ADC_MPD_CURRENT_CHANNEL, &value);
   temp = (double)value / 4096 * 2.5 * 1000;
   BE32_To_Buffer((uint32_t)value, resp_buf.buf + 40);
   value = (uint16_t)(int16_t)temp;
@@ -1448,6 +2039,102 @@ uint8_t debug_get_pd(uint32_t which)
   BE32_To_Buffer((int32_t)(power * 100), resp_buf.buf + 4);
 
   return RESPOND_SUCCESS;
+}
+
+uint8_t debug_set_lp(uint32_t which)
+{
+  uint8_t ret;
+  uint8_t switch_channel, switch_pos;
+
+  if (which == 0) {
+    switch_channel = TX_SWITCH_CHANNEL;
+    switch_pos = 64;
+  } else if (which == 1) {
+    switch_channel = TX_SWITCH_CHANNEL;
+    switch_pos = 65;
+  } else if (which == 2) {
+    switch_channel = RX_SWITCH_CHANNEL;
+    switch_pos = 32;
+  } else {
+    return RESPOND_FAILURE;
+  }
+
+  if (ret) {
+    return RESPOND_FAILURE;
+  }
+
+  if (run_status.tx_block && switch_channel == TX_SWITCH_CHANNEL) {
+    return RESPOND_FAILURE;
+  }
+
+  Clear_Switch_Ready(switch_channel);
+
+  if (Set_Switch(switch_channel, switch_pos)) {
+    if (switch_channel == TX_SWITCH_CHANNEL) {
+      run_status.tx_switch_channel = 0xFF;
+    } else {
+      run_status.rx_switch_channel = 0xFF;
+    }
+    return RESPOND_FAILURE;
+  }
+
+  if (switch_channel == TX_SWITCH_CHANNEL) {
+    run_status.tx_switch_channel = switch_pos;
+  } else {
+    run_status.rx_switch_channel = switch_pos;
+  }
+
+  // Check
+  if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
+    Reset_Switch(switch_channel);
+    return RESPOND_FAILURE;
+  }
+
+  Set_Switch_Ready(switch_channel);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t debug_get_switch_channel(uint8_t switch_channel)
+{
+  int8_t ret;
+
+  resp_buf.buf[0] = switch_channel;
+  if (switch_channel == TX_SWITCH_CHANNEL) {
+    if (run_status.tx_block) {
+      resp_buf.buf[1] = 0xFF;
+      return RESPOND_SUCCESS;
+    }
+
+    ret = Get_Current_Switch_Channel(switch_channel);
+    if (ret == -2) {
+      resp_buf.buf[1] = 0xFF;
+    } else if (ret < 0) {
+      resp_buf.buf[1] = 0xFF;
+      return RESPOND_FAILURE;
+    } else if (ret >= 66) {
+      resp_buf.buf[1] = 0xFF;
+    } else {
+      resp_buf.buf[1] = ret;
+    }
+    return RESPOND_SUCCESS;
+  } else if (switch_channel == RX_SWITCH_CHANNEL) {
+    ret = Get_Current_Switch_Channel(switch_channel);
+    if (ret == -2) {
+      resp_buf.buf[1] = 0xFF;
+      return RESPOND_INVALID_PARA;
+    } else if (ret < 0) {
+      resp_buf.buf[1] = 0xFF;
+      return RESPOND_FAILURE;
+    } else if (ret >= 33) {
+      resp_buf.buf[1] = 0xFF;
+      return RESPOND_INVALID_PARA;
+    } else {
+      resp_buf.buf[1] = ret;
+    }
+    return RESPOND_SUCCESS;
+  } else {
+    return RESPOND_INVALID_PARA;
+  }
 }
 
 uint8_t debug_get_inter_exp(void)

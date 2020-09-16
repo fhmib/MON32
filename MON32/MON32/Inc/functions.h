@@ -55,6 +55,8 @@ typedef enum {
   EE_CAL_RX_IL            = 0x1450,
   EE_CAL_LB_IL            = 0x14D0,
   EE_CAL_RX_PD            = 0x1500,
+  // Alarm
+  EE_ALARM_HISTORY        = 0x1570,
   // upgrade
   EE_UP_MAGIC             = 0x3000, // 0x3000 ~ 0x3003
   EE_UP_RUN               = 0x3004, // 0x3004 ~ 0x3004 Which fw is running
@@ -67,6 +69,10 @@ typedef enum {
   EE_LOG_MAGIC            = 0x3020, // 0x3020 ~ 0x3023
   EE_LOG_OFFSET           = 0x3024, // 0x3024 ~ 0x3027
   EE_LOG_HEADER           = 0x3028, // 0x3028 ~ 0x302B
+  // Alarm
+  EE_ALARM_MAGIC          = 0x3040,
+  EE_ALARM_START          = 0x3044,
+  EE_ALARM_END            = 0x3045,
 } EepromAddrMap;
 
 typedef enum {
@@ -115,6 +121,31 @@ typedef enum {
 } VoltageAdcChannel;
 
 typedef enum {
+  TEC_ADC_TEC_TEMP_CHANNEL    = 0,
+  TEC_ADC_TEC_VOLTAGE_CHANNEL = 1,
+  TEC_ADC_TEC_CURRENT_CHANNEL = 2,
+  TEC_ADC_LD_CURRENT_CHANNEL  = 3,
+  TEC_ADC_LD_VOLTAGE_CHANNEL  = 4,
+  TEC_ADC_MPD_CURRENT_CHANNEL = 5,
+} TecAdcChannel;
+
+typedef enum {
+  EXP_TEMPERATURE         =    1,
+  EXP_VOLTAGE_61_0        =    4,
+  EXP_VOLTAGE_4_4         =    5,
+  EXP_VOLTAGE_3_3         =    6,
+  EXP_VOLTAGE_5_0         =    7,
+  EXP_DAC                 =   13,
+  EXP_ADC_2               =   14,
+  EXP_ADC_1               =   15,
+  EXP_SWITCH              =   17,
+  EXP_TEC_TEMP_LOSS       =   23,
+  EXP_TEC_VOLTAGE         =   28,
+  EXP_TEC_CURRENT         =   29,
+  EXP_TEC_TEMP            =   30,
+} ExptoinValue;
+
+typedef enum {
   INT_EXP_UP_ERASE        =  0,
   INT_EXP_UP_PROGRAM      =  1,
   INT_EXP_LOG_ERASE       =  2,
@@ -122,6 +153,7 @@ typedef enum {
   INT_EXP_INIT            =  4,
   INT_EXP_OS_ERR          =  5,
   INT_EXP_TMPGD           =  6,
+  INT_EXP_UP_ALARM        =  7,
   INT_EXP_CONST           = 31,
 } InternalExptoinValue;
 
@@ -132,6 +164,43 @@ typedef struct {
   uint16_t tap_adc;
   double tap_power;
 } TosaCalData;
+
+typedef struct {
+  double vol_3_3_high_alarm;
+  double vol_3_3_high_clear;
+  double vol_3_3_low_alarm;
+  double vol_3_3_low_clear;
+
+  double vol_4_4_high_alarm;
+  double vol_4_4_high_clear;
+  double vol_4_4_low_alarm;
+  double vol_4_4_low_clear;
+
+  double vol_5_0_high_alarm;
+  double vol_5_0_high_clear;
+  double vol_5_0_low_alarm;
+  double vol_5_0_low_clear;
+
+  double vol_61_0_high_alarm;
+  double vol_61_0_high_clear;
+  double vol_61_0_low_alarm;
+  double vol_61_0_low_clear;
+
+  double temp_high_alarm;
+  double temp_high_clear;
+  double temp_low_alarm;
+  double temp_low_clear;
+
+  double tec_cur_high_alarm;
+  double tec_cur_high_clear;
+  double tec_cur_low_alarm;
+  double tec_cur_low_clear;
+
+  double tec_vol_high_alarm;
+  double tec_vol_high_clear;
+  double tec_vol_low_alarm;
+  double tec_vol_low_clear;
+} ThresholdStruct;
 
 typedef struct {
   uint32_t maigc;
@@ -145,16 +214,31 @@ typedef struct {
   uint32_t internal_exp;
   TosaCalData tosa_low;
   TosaCalData tosa_high;
+  ThresholdStruct thr_table;
 } RunTimeStatus;
+
+// For Alarm
+typedef struct {
+  uint32_t magic;
+  uint8_t start;
+  uint8_t end;
+} AlarmHistoryState;
 
 
 osStatus_t Get_Up_Status(UpgradeFlashState *status);
 osStatus_t Update_Up_Status(UpgradeFlashState *status);
 osStatus_t Reset_Up_Status(void);
+osStatus_t Get_Threshold_Table(ThresholdStruct *table);
+
+osStatus_t Get_EEPROM_Alarm_Status(AlarmHistoryState *alarm);
+osStatus_t Update_EEPROM_Alarm_Status(AlarmHistoryState *alarm);
+osStatus_t Reset_EEPROM_Alarm_Status(void);
+osStatus_t Update_History_Alarm(uint32_t exp);
 
 uint8_t Get_Switch_Position_By_IO(uint8_t switch_channel);
 int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos);
 int8_t Get_Current_Switch_Channel(uint8_t switch_channel);
+int8_t Get_Current_Switch_ADC(uint8_t switch_channel, int16_t *x1, int16_t *y1, int16_t *x2, int16_t *y2);
 int8_t Clear_Switch_Dac(uint32_t switch_id);
 int8_t Get_Switch_Adc(uint32_t switch_id, uint16_t *px, uint16_t *nx, uint16_t *py, uint16_t *ny);
 int32_t Get_Index_Of_Channel_Map(uint8_t switch_channel, uint8_t switch_pos);
@@ -179,8 +263,13 @@ void update_tosa_table(void);
 TosaCalData Get_Tosa_Data(double power);
 TosaCalData Cal_Tosa_Data(TosaCalData x1, TosaCalData x2, double power);
 
+uint8_t cal_tap_pd_by_power(uint16_t *adc, double power);
 uint8_t get_tap_pd_power(uint16_t *adc, double *power);
 uint8_t get_rx_pd_power(uint16_t *adc, double *power);
+
+uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf);
+uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high);
+uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf);
 
 uint8_t debug_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y);
 int8_t set_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y);
@@ -199,6 +288,8 @@ uint8_t debug_set_tosa(uint16_t low, uint16_t high);
 uint8_t debug_set_tec(uint16_t value);
 uint8_t debug_get_tosa_tmp(void);
 uint8_t debug_get_pd(uint32_t which);
+uint8_t debug_set_lp(uint32_t which);
+uint8_t debug_get_switch_channel(uint8_t switch_channel);
 uint8_t debug_get_inter_exp(void);
 
 

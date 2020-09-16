@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.2"; // 4 bytes
+char *fw_version = "S0.3"; // 4 bytes
 
 extern UpgradeFlashState upgrade_status;
 
@@ -34,15 +34,23 @@ CmdStruct command_list[] = {
   {CMD_QUERY_TOSA_THR, 4, Cmd_Query_Tosa_Thr},
   {CMD_SET_TOSA, 8, Cmd_Set_Tosa},
   {CMD_QUERY_TOSA, 4, Cmd_Query_Tosa},
+  {CMD_RX_PD_CALI, 4, Cmd_RX_PD_CALI},
+  {CMD_TAP_PD_CALI, 4, Cmd_TAP_PD_CALI},
   {CMD_QUERY_VOLTAGE, 4, Cmd_Voltage},
+  {CMD_QUERY_ALARM, 4, Cmd_Query_Alarm},
   {CMD_SET_MODULATION, 5, Cmd_Set_Modulation},
   {CMD_QUERY_MODULATION, 4, Cmd_Query_Modulation},
+  {CMD_QUERY_STATUS, 4, Cmd_Query_Status},
+  {CMD_QUERY_ALARM_HISTORY, 4, Cmd_Query_Alarm_History},
   {CMD_UPGRADE_MODE, 5, Cmd_Upgrade_Init},
   {CMD_UPGRADE_DATA, 0x86, Cmd_Upgrade_Data},
   {CMD_UPGRADE_RUN, 4, Cmd_Upgrade_Install},
   {CMD_SOFTRESET, 4, Cmd_Softreset},
   {CMD_SET_LOG_TIME, 0xA, Cmd_Set_Time},
   {CMD_QUERY_LOG_TIME, 4, Cmd_Get_Time},
+  {CMD_SET_THRESHOLD, 0xD, Cmd_Set_Threshold},
+  {CMD_QUERY_THRESHOLD, 5, Cmd_Query_Threshold},
+  {CMD_QUERY_PERFORMANCE, 0xFFFF, Cmd_Performance},
 
   {CMD_FOR_DEBUG, 0xFFFF, Cmd_For_Debug},
 };
@@ -210,7 +218,7 @@ uint8_t Cmd_Set_Switch(void)
     return RESPOND_INVALID_PARA;
   }
   
-  if (run_status.tx_block) {
+  if (run_status.tx_block && switch_channel == TX_SWITCH_CHANNEL) {
     EPT("Switch is blocked\n");
     THROW_LOG("Switch is blocked\n\n");
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
@@ -227,6 +235,9 @@ uint8_t Cmd_Set_Switch(void)
     }
     EPT("Set switch channel failed\n");
     THROW_LOG("Set switch channel failed\n");
+    if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
+      Set_Flag(&run_status.exp, EXP_SWITCH);
+    }
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -242,6 +253,9 @@ uint8_t Cmd_Set_Switch(void)
     Reset_Switch(switch_channel);
     EPT("Set switch channel failed 2\n");
     THROW_LOG("Set switch channel failed 2\n");
+    if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
+      Set_Flag(&run_status.exp, EXP_SWITCH);
+    }
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -257,7 +271,7 @@ uint8_t Cmd_Get_Switch(void)
   int8_t ret;
 
   resp_buf.buf[0] = switch_channel;
-  if (switch_channel == 0) {
+  if (switch_channel == TX_SWITCH_CHANNEL) {
     if (run_status.tx_block) {
       resp_buf.buf[1] = 0xFF;
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 2);
@@ -278,7 +292,7 @@ uint8_t Cmd_Get_Switch(void)
     }
     FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_SUCCESS, 2);
     return RESPOND_SUCCESS;
-  } else if (switch_channel == 1) {
+  } else if (switch_channel == RX_SWITCH_CHANNEL) {
     ret = Get_Current_Switch_Channel(switch_channel);
     if (ret == -2) {
       resp_buf.buf[1] = 0xFF;
@@ -288,7 +302,7 @@ uint8_t Cmd_Get_Switch(void)
       resp_buf.buf[1] = 0xFF;
       FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_FAILURE, 2);
       return RESPOND_FAILURE;
-    } else if (ret >= 64) {
+    } else if (ret >= 32) {
       resp_buf.buf[1] = 0xFF;
       FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_INVALID_PARA, 2);
       return RESPOND_INVALID_PARA;
@@ -339,7 +353,7 @@ uint8_t Cmd_Get_IL(void)
 
   if (which == 0) {
     for (i = 0; i < 64; ++i) {
-      status |= RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
+      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
     }
     if (status != osOK) {
       EPT("Read EEPROM failed, status = %d\n", status);
@@ -348,7 +362,7 @@ uint8_t Cmd_Get_IL(void)
     }
   } else if (which == 1) {
     for (i = 0; i < 32; ++i) {
-      status |= RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
+      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
     }
     if (status != osOK) {
       EPT("Read EEPROM failed, status = %d\n", status);
@@ -450,6 +464,81 @@ uint8_t Cmd_Query_Tosa()
   return RESPOND_SUCCESS;
 }
 
+uint8_t Cmd_RX_PD_CALI(void)
+{
+  osStatus_t status = osOK;
+  uint32_t i;
+
+  resp_buf.buf[0] = 10;
+  for (i = 0; i < 10; ++i) {
+    status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_PD + i * 8 + 4 + 2, resp_buf.buf + 1 + i * 4, 2);
+    status |= RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_PD + i * 8 + 2, resp_buf.buf + 1 + i * 4 + 2, 2);
+  }
+  if (status != osOK) {
+    EPT("Read EEPROM failed, status = %d\n", status);
+    FILL_RESP_MSG(CMD_RX_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+
+  FILL_RESP_MSG(CMD_RX_PD_CALI, RESPOND_SUCCESS, 41);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_TAP_PD_CALI(void)
+{
+  uint16_t adc;
+  uint8_t ret = 0;
+
+  resp_buf.buf[0] = 5;
+  ret = cal_tap_pd_by_power(&adc, -15);
+  if (ret) {
+    FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  } else {
+    BE16_To_Buffer((uint16_t)(int16_t)(-15 * 100), resp_buf.buf + 1);
+    BE16_To_Buffer((uint16_t)(int16_t)adc, resp_buf.buf + 1 + 2);
+  }
+
+  ret = cal_tap_pd_by_power(&adc, -10);
+  if (ret) {
+    FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  } else {
+    BE16_To_Buffer((uint16_t)(int16_t)(-10 * 100), resp_buf.buf + 1 + 4);
+    BE16_To_Buffer((uint16_t)(int16_t)adc, resp_buf.buf + 1 + 6);
+  }
+
+  ret = cal_tap_pd_by_power(&adc, -5);
+  if (ret) {
+    FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  } else {
+    BE16_To_Buffer((uint16_t)(int16_t)(-5 * 100), resp_buf.buf + 1 + 8);
+    BE16_To_Buffer((uint16_t)(int16_t)adc, resp_buf.buf + 1 + 10);
+  }
+
+  ret = cal_tap_pd_by_power(&adc, 0);
+  if (ret) {
+    FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  } else {
+    BE16_To_Buffer((uint16_t)(int16_t)(0 * 100), resp_buf.buf + 1 + 12);
+    BE16_To_Buffer((uint16_t)(int16_t)adc, resp_buf.buf + 1 + 14);
+  }
+
+  ret = cal_tap_pd_by_power(&adc, 5);
+  if (ret) {
+    FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  } else {
+    BE16_To_Buffer((uint16_t)(int16_t)(5 * 100), resp_buf.buf + 1 + 16);
+    BE16_To_Buffer((uint16_t)(int16_t)adc, resp_buf.buf + 1 + 18);
+  }
+
+  FILL_RESP_MSG(CMD_TAP_PD_CALI, RESPOND_SUCCESS, 21);
+  return RESPOND_SUCCESS;
+}
+
 uint8_t Cmd_Voltage()
 {
   uint16_t value;
@@ -501,6 +590,13 @@ uint8_t Cmd_Voltage()
   memset(resp_buf.buf + 17, 0xFF, 8);
 
   FILL_RESP_MSG(CMD_QUERY_VOLTAGE, RESPOND_SUCCESS, 25);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Query_Alarm(void)
+{
+  BE32_To_Buffer(run_status.exp, resp_buf.buf);
+  FILL_RESP_MSG(CMD_QUERY_ALARM, RESPOND_SUCCESS, 4);
   return RESPOND_SUCCESS;
 }
 
@@ -567,6 +663,50 @@ uint8_t Cmd_Query_Modulation(void)
 {
   resp_buf.buf[0] = run_status.modulation;
   FILL_RESP_MSG(CMD_QUERY_MODULATION, RESPOND_SUCCESS, 1);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Query_Status(void)
+{
+  resp_buf.buf[0] = device_busy;
+  FILL_RESP_MSG(CMD_QUERY_STATUS, RESPOND_SUCCESS, 1);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Query_Alarm_History(void)
+{
+  uint32_t seq;
+  uint32_t exp;
+  uint8_t buf[4];
+  uint8_t offset, count;
+
+  if (history_alarm_status.magic != ALARM_MAGIC || history_alarm_status.start == 0) {
+    count = 0;
+  } else if (history_alarm_status.start <= history_alarm_status.end) {
+    count = history_alarm_status.end - history_alarm_status.start + 1;
+  } else {
+    count = 10;
+  }
+
+  for (seq = 1; seq <= 10; seq++) {
+    BE32_To_Buffer(seq, resp_buf.buf + (seq - 1) * 8);
+    exp = 0;
+    if (history_alarm_status.magic == ALARM_MAGIC) {
+      if (count) {
+        offset = history_alarm_status.start + (seq - 1);
+        offset = offset > 10 ? offset - 10: offset;
+        if (RTOS_EEPROM_Read(EEPROM_ADDR, EE_ALARM_HISTORY + (offset - 1) * 4, buf, 4) == osOK) {
+          exp = Buffer_To_BE32(buf);
+        } else {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        }
+        count--;
+      }
+    }
+    BE32_To_Buffer(exp, resp_buf.buf + (seq - 1) * 8 + 4);
+  }
+
+  FILL_RESP_MSG(CMD_QUERY_ALARM_HISTORY, RESPOND_SUCCESS, 80);
   return RESPOND_SUCCESS;
 }
 
@@ -840,6 +980,59 @@ uint8_t Cmd_Get_Time(void)
   return RESPOND_SUCCESS;
 }
 
+uint8_t Cmd_Performance(void)
+{
+  uint8_t per_count = trans_buf.buf[CMD_SEQ_MSG_LENGTH] - 4;
+  uint8_t i;
+
+  if (per_count == 0 || per_count > 0x13) {
+    FILL_RESP_MSG(CMD_QUERY_PERFORMANCE, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+  for (i = 0; i < per_count; ++i) {
+    resp_buf.buf[i * 5] = trans_buf.buf[CMD_SEQ_MSG_DATA + i];
+    if (Get_Performance(trans_buf.buf[CMD_SEQ_MSG_DATA + i], resp_buf.buf + i * 5 + 1)) {
+      FILL_RESP_MSG(CMD_QUERY_PERFORMANCE, RESPOND_INVALID_PARA, 0);
+      return RESPOND_INVALID_PARA;
+    }
+  }
+
+  FILL_RESP_MSG(CMD_QUERY_PERFORMANCE, RESPOND_SUCCESS, per_count * 5);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Set_Threshold(void)
+{
+  uint8_t alarm_id = trans_buf.buf[CMD_SEQ_MSG_DATA];
+  uint32_t val32_1, val32_2;
+  
+  val32_1 = Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 1]);
+  val32_2 = Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 5]);
+  if (val32_2 < val32_1) {
+    FILL_RESP_MSG(CMD_SET_THRESHOLD, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+  if (Set_Threshold(alarm_id, val32_1, val32_2)) {
+    FILL_RESP_MSG(CMD_SET_THRESHOLD, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+  FILL_RESP_MSG(CMD_SET_THRESHOLD, RESPOND_SUCCESS, 0);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Query_Threshold(void)
+{
+  uint8_t alarm_id = trans_buf.buf[CMD_SEQ_MSG_DATA];
+  
+  resp_buf.buf[0] = alarm_id;
+  if (Get_Threshold(alarm_id, resp_buf.buf + 1)) {
+    FILL_RESP_MSG(CMD_QUERY_THRESHOLD, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+  FILL_RESP_MSG(CMD_QUERY_THRESHOLD, RESPOND_SUCCESS, 9);
+  return RESPOND_SUCCESS;
+}
+
 uint8_t Cmd_For_Debug()
 {
   uint8_t *prdata = trans_buf.buf + CMD_SEQ_MSG_DATA;
@@ -972,6 +1165,26 @@ uint8_t Cmd_For_Debug()
     ret = debug_get_pd(sw_num);
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 8);
     return ret;
+  } else if (temp == CMD_DEBUG_SET_LP) {
+    sw_num = Buffer_To_BE32(prdata + 8);
+    ret = debug_set_lp(sw_num);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 0);
+    return ret;
+  } else if (temp == CMD_DEBUG_GET_SW_CHAN) {
+    sw_num = Buffer_To_BE32(prdata + 8);
+    ret = debug_get_switch_channel(sw_num);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 2);
+    return ret;
+  } else if (temp == CMD_DEBUG_RESET_ALARM) {
+    memset(resp_buf.buf, 0, 4);
+    if (Reset_EEPROM_Alarm_Status() == osOK) {
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 4);
+      return RESPOND_SUCCESS;
+    }
+    else {
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_FAILURE, 4);
+      return RESPOND_FAILURE;
+    }
   } else if (temp == CMD_DEBUG_INTER_EXP) {
     ret = debug_get_inter_exp();
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);

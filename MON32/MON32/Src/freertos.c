@@ -473,6 +473,7 @@ void monitorTask(void *argument)
   uint16_t value;
   double voltage, temp;
   uint8_t pre_alarm;
+  uint32_t pre_exp_value;
 
   osDelay(pdMS_TO_TICKS(1000));
   pre_alarm = run_status.exp == 0 ? 0: 1;
@@ -524,16 +525,181 @@ void monitorTask(void *argument)
       }
     }
 
+    // Alarm
+    status = RTOS_ADC7828_Read(VOLTAGE_3_3_CHANNEL, &value);
+    if (status != osOK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+    } else {
+      voltage = (double)value / 4096 * 2.5 * 2;
+    }
+    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_3_3)) {
+      if (voltage > run_status.thr_table.vol_3_3_high_alarm || voltage < run_status.thr_table.vol_3_3_low_alarm) {
+        THROW_LOG("Voltage 3.3V abnormal, current voltage = %.3lfV\n", voltage);
+        Set_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
+      }
+    } else {
+      if (voltage <= run_status.thr_table.vol_3_3_high_clear && voltage >= run_status.thr_table.vol_3_3_low_clear) {
+        THROW_LOG("Voltage 3.3V back to normal\n");
+        Clear_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
+      }
+    }
+
+    status = RTOS_ADC7828_Read(VOLTAGE_4_4_CHANNEL, &value);
+    if (status != osOK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+    } else {
+      voltage = (double)value / 4096 * 2.5 * 3;
+    }
+    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_4_4)) {
+      if (voltage > run_status.thr_table.vol_4_4_high_alarm || voltage < run_status.thr_table.vol_4_4_low_alarm) {
+        THROW_LOG("Voltage 4.4V abnormal, current voltage = %.3lfV\n", voltage);
+        Set_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
+      }
+    } else {
+      if (voltage <= run_status.thr_table.vol_4_4_high_clear && voltage >= run_status.thr_table.vol_4_4_low_clear) {
+        THROW_LOG("Voltage 4.4V back to normal\n");
+        Clear_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
+      }
+    }
+
+    status = RTOS_ADC7828_Read(VOLTAGE_5_0_CHANNEL, &value);
+    if (status != osOK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      value = 0;
+    } else {
+      voltage = (double)value / 4096 * 2.5 * 3;
+    }
+    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_5_0)) {
+      if (voltage > run_status.thr_table.vol_5_0_high_alarm || voltage < run_status.thr_table.vol_5_0_low_alarm) {
+        THROW_LOG("Voltage 5V abnormal, current voltage = %.3lfV\n", voltage);
+        Set_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
+      }
+    } else {
+      if (voltage <= run_status.thr_table.vol_5_0_high_clear && voltage >= run_status.thr_table.vol_5_0_low_clear) {
+        THROW_LOG("Voltage 5V back to normal\n");
+        Clear_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
+      }
+    }
+
+    status = RTOS_ADC7828_Read(VOLTAGE_61_0_CHANNEL, &value);
+    if (status != osOK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      value = 0;
+    } else {
+      voltage = (double)value / 4096 * 2.5 * 51;
+    }
+    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_61_0)) {
+      if (voltage > run_status.thr_table.vol_61_0_high_alarm || voltage < run_status.thr_table.vol_61_0_low_alarm) {
+        THROW_LOG("Voltage 61V abnormal, current voltage = %.3lfV\n", voltage);
+        Set_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
+      }
+    } else {
+      if (voltage <= run_status.thr_table.vol_61_0_high_clear && voltage >= run_status.thr_table.vol_61_0_low_clear) {
+        THROW_LOG("Voltage 61V back to normal\n");
+        Clear_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
+      }
+    }
+
+    status = RTOS_ADC7828_Read(TEMPERATURE_CHANNEL, &value);
+    if (status != osOK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      value = 0;
+    } else {
+      temp = Cal_Temp(value);
+    }
+    if (!Is_Flag_Set(&run_status.exp, EXP_TEMPERATURE)) {
+      if (temp > run_status.thr_table.temp_high_alarm || temp < run_status.thr_table.temp_low_alarm) {
+        THROW_LOG("Temperature abnormal, current temperature = %.3lfC\n", temp);
+        Set_Flag(&run_status.exp, EXP_TEMPERATURE);
+      }
+    } else {
+      if (temp <= run_status.thr_table.temp_high_clear && temp >= run_status.thr_table.temp_low_clear) {
+        THROW_LOG("Temperature back to normal\n");
+        Clear_Flag(&run_status.exp, EXP_TEMPERATURE);
+      }
+    }
+
+    if (run_status.tosa_enable) {
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_CURRENT_CHANNEL, &value);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      } else {
+        voltage = (double)value / 4096 * 2.5;
+        voltage = (voltage - 1.25) / 0.285 * 1000;
+      }
+      if (!Is_Flag_Set(&run_status.exp, EXP_TEC_CURRENT)) {
+        if (voltage > run_status.thr_table.tec_cur_high_alarm || voltage < run_status.thr_table.tec_cur_low_alarm) {
+          THROW_LOG("Tec current abnormal, current current = %.lfmA\n", voltage);
+          Set_Flag(&run_status.exp, EXP_TEC_CURRENT);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.tec_cur_high_clear && voltage >= run_status.thr_table.tec_cur_low_clear) {
+          THROW_LOG("Tec current back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_TEC_CURRENT);
+        }
+      }
+
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_VOLTAGE_CHANNEL, &value);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      } else {
+        voltage = (double)value / 4096 * 2.5;
+        voltage = (voltage - 1.25) / 0.25 * 1000;
+      }
+      if (!Is_Flag_Set(&run_status.exp, EXP_TEC_VOLTAGE)) {
+        if (voltage > run_status.thr_table.tec_vol_high_alarm || voltage < run_status.thr_table.tec_vol_low_alarm) {
+          THROW_LOG("Tec voltage abnormal, current voltage = %.lfmV\n", voltage);
+          Set_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.tec_vol_high_clear && voltage >= run_status.thr_table.tec_vol_low_clear) {
+          THROW_LOG("Tec voltage back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+        }
+      }
+    }
+    
+    if (run_status.tosa_enable) {
+      if (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
+        if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+        }
+        if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP)) {
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP);
+        }
+      } else {
+        if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+          Clear_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+        }
+        if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP)) {
+          Clear_Flag(&run_status.exp, EXP_TEC_TEMP);
+        }
+      }
+    }
+
+
     if (run_status.exp && !pre_alarm) {
       Set_Alarm();
+      if (Update_History_Alarm(run_status.exp) != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_UP_ALARM);
+      }
       pre_alarm = 1;
+      pre_exp_value = run_status.exp;
     } else if (!run_status.exp && pre_alarm) {
       Clear_Alarm();
       pre_alarm = 0;
+      pre_exp_value = 0;
+    } else if (run_status.exp && pre_alarm) {
+      if (run_status.exp != pre_exp_value) {
+        if (Update_History_Alarm(run_status.exp) != osOK) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_UP_ALARM);
+        }
+        pre_exp_value = run_status.exp;
+      }
     }
 
     osDelay(pdMS_TO_TICKS(200));
-  } 
+  }
 }
 
 /* USER CODE END Application */

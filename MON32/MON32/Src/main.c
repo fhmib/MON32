@@ -56,10 +56,14 @@ uint8_t reset_flag = 0;
 uint8_t flash_in_use;
 UpgradeFlashState upgrade_status;
 
+AlarmHistoryState history_alarm_status;
+
 TosaCalData tosa_table[TOSA_TABLE_COUNT];
 uint8_t tosa_table_count = 0;
 double tosa_power_high_max_thr = 0;
 double tosa_power_low_min_thr = 0;
+
+uint8_t device_busy = 0;
 
 RunTimeStatus run_status __attribute__((at(0x2002FC00)));
 /* USER CODE END PV */
@@ -408,6 +412,11 @@ void MON32_Init(void)
     EPT("flash is empty\n");
   }
   
+  // alarm
+  if ((status = Get_EEPROM_Alarm_Status(&history_alarm_status)) != osOK) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+  }
+  
 }
 
 void MON32_Init_Dev(void)
@@ -421,6 +430,7 @@ void MON32_Init_Dev(void)
   osDelay(pdMS_TO_TICKS(1));
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
   Init_Run_Status();
+  Get_Threshold_Table(&run_status.thr_table);
 
   run_status.tosa_high = Get_Tosa_Data(0);
   run_status.tosa_low = Get_Tosa_Data(-4);
@@ -436,6 +446,18 @@ void MON32_Init_Dev(void)
         Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
       }
       run_status.tosa_enable = 1;
+    }
+  }
+
+  if (Set_Switch(RX_PD_CHANNEL, 0)) {
+    run_status.rx_switch_channel = 0xFF;
+  } else {
+    run_status.rx_switch_channel = 0;
+    // Check
+    if (Get_Current_Switch_Channel(RX_PD_CHANNEL) != 0) {
+      Reset_Switch(RX_PD_CHANNEL);
+    } else {
+      Set_Switch_Ready(RX_PD_CHANNEL);
     }
   }
 }

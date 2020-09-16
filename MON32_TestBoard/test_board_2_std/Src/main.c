@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "MON32_testboard_1.0.0"
+#define VER "MON32_testboard_1.0.1"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 
@@ -247,11 +247,18 @@ console_cmd cmdlist[] = {
   {"temp", cmd_temp, "Get device temperature", "temp", "temp"},
   {"il", cmd_IL, "Get Optical Switch Insertion Loss", "il <0/1>", "il 0"},
   {"tosa", cmd_tosa, "Command about tosa", "tosa set <high> <low> | get | thr", "tosa set 0 -4 | tosa get | tosa thr"},
-  {"voltage", cmd_voltage, "Get device voltage", "voltage get | get thr", "voltage get | get thr"},
+  {"pd2", cmd_rx_pd_cali, "Get RX PD calibration data", "pd2", "pd2"},
+  {"pd1", cmd_tap_pd_cali, "Get TAP PD calibration data", "pd1", "pd1"},
+  {"voltage", cmd_voltage, "Get device voltage", "voltage get", "voltage get"},
+  {"alarm", cmd_alarm, "Get alarm", "alarm", "alarm"},
   {"modulation", cmd_modulation, "Command about tosa", "modulation on | off | mode", "modulation on | off | mode"},
+  {"status", cmd_device_status, "Get device status", "status", "status"},
+  {"history_alarm", cmd_history_alarm, "Get history alarm", "history_alarm", "history_alarm"},
   {"upgrade", cmd_upgrade, "Command about upgrade", "upgrade init | file | run", "upgrade init | file | run"},
   {"reset", cmd_reset, "Reset the device", "reset <soft | hard | master>", "reset soft"},
   {"date", cmd_time, "Set/Get module time", "date get | set y m d h m s", "date get | set 2020 7 29 15 55 50"},
+  {"performance", cmd_performance, "Get performance", "performance [id1] [id2] ... | all", "performance 1 5 | performance all"},
+  {"threshold", cmd_threshold, "Set/Get threshold", "threshold get <id> | set <id> <low> <high>", "threshold get 0 | set 0 -100 800"},
   {"debug", cmd_for_debug, "Command for debug", "debug", "debug"},
   {"help", cmd_help, "Help information", "help | <cmd> help", "help | upgrade help"},
 };
