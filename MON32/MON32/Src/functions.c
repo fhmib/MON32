@@ -29,7 +29,150 @@ SwitchDacMapStruct switch_map[] = {
   {SWITCH_NUM_8, /*DAC channel*/ 28, 29, 30, 31, /*ADC channel*/ 28, 29, 30, 31}
 };
 
+extern osMessageQueueId_t mid_LogMsg;
 extern RespondStu resp_buf;
+
+#define LOG_HEADER "%04u-%02u-%02u %02u:%02u:%02u : "
+
+void Throw_Log(uint8_t type, uint8_t *buf, uint32_t length)
+{
+  MsgStruct log_msg;
+  RTC_DateTypeDef date;
+  RTC_TimeTypeDef time;
+#ifdef PRINT_DEBUG_MESSAGE
+  osStatus_t status;
+#endif
+
+  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+
+  log_msg.pbuf = pvPortMalloc(length + 32);
+  sprintf(log_msg.pbuf, LOG_HEADER, 2000 + date.Year, date.Month, date.Date, time.Hours, time.Minutes, time.Seconds);
+  log_msg.length = strlen((char*)log_msg.pbuf);
+  memcpy((char*)log_msg.pbuf + log_msg.length, buf, length);
+  log_msg.length += length;
+  log_msg.type = type;
+#ifdef PRINT_DEBUG_MESSAGE
+  if ((status = osMessageQueuePut(mid_LogMsg, &log_msg, 0U, 0U)) != osOK) {
+    EPT("Put Message to Queue failed, status = %d\n", status);
+  }
+#else
+  osMessageQueuePut(mid_LogMsg, &log_msg, 0U, 0U);
+#endif
+}
+
+uint32_t Log_Write(uint32_t addr, uint8_t *pbuf, uint32_t length)
+{
+  uint32_t w_len = 0, data, i;
+  uint8_t remainder = length % 4;
+
+  /* Unlock the Flash to enable the flash control register access *************/
+  HAL_FLASH_Unlock();
+
+  while (w_len < length) {
+    if (w_len + 4 > length) {
+      for (i = 0, data = 0; i < 4; ++i) {
+        data |= (i < remainder ? pbuf[w_len + i] : i == 3 ? '\n' : ' ') << i * 8;
+      }
+    } else {
+      memcpy(&data, pbuf + w_len, 4);
+    }
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, (uint64_t)data) != HAL_OK) {
+      Set_Flag(&run_status.internal_exp, INT_EXP_LOG_PROGRAM);
+      break;
+    }
+    addr += 4;
+    w_len += 4;
+  }
+
+  /* Lock the Flash to disable the flash control register access (recommended
+     to protect the FLASH memory against possible unwanted operation) *********/
+  HAL_FLASH_Lock();
+
+  return w_len;
+}
+
+uint32_t Log_Write_byte(uint32_t addr, uint8_t ch, uint32_t length)
+{
+  uint32_t w_len = 0, data;
+
+  if (ch == '\n' && length == 4) {
+    data = ch << 24 | ' ' << 16 | ' ' << 8 | ' ';
+  } else {
+    data = ch << 24 | ch << 16 | ch << 8 | ch;
+  }
+  /* Unlock the Flash to enable the flash control register access *************/
+  HAL_FLASH_Unlock();
+
+  while (w_len < length) {
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, (uint64_t)data);
+    addr += 4;
+    w_len += 4;
+  }
+
+  /* Lock the Flash to disable the flash control register access (recommended
+     to protect the FLASH memory against possible unwanted operation) *********/
+  HAL_FLASH_Lock();
+
+  return w_len;
+}
+
+uint32_t Log_Read(uint32_t addr, uint8_t *pbuf, uint32_t length)
+{
+  memcpy(pbuf, (void*)addr, length);
+
+  return length;
+}
+
+osStatus_t Get_Log_Status(LogFileState *log_status)
+{
+  osStatus_t status;
+  uint8_t buf[32];
+
+  status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_LOG_MAGIC, buf, sizeof(buf));
+  if (status != osOK) {
+    return status;
+  }
+
+  log_status->magic = Buffer_To_BE32(&buf[EE_LOG_MAGIC - EE_LOG_MAGIC]);
+  log_status->magic_2 = Buffer_To_BE32(&buf[EE_LOG_MAGIC_2 - EE_LOG_MAGIC]);
+  if (log_status->magic_2 != LOG_MAGIC) {
+    log_status->magic = LOG_MAGIC;
+    log_status->magic_2 = LOG_MAGIC;
+    log_status->error_offset = error_file_flash_addr[0];
+    log_status->error_header = error_file_flash_addr[0];
+    log_status->normal_offset = normal_file_flash_addr[0];
+    log_status->normal_header = normal_file_flash_addr[0];
+    return Update_Log_Status(log_status);
+  } else {
+    log_status->error_offset = Buffer_To_BE32(&buf[EE_ERROR_LOG_OFFSET - EE_LOG_MAGIC]);
+    log_status->error_header = Buffer_To_BE32(&buf[EE_ERROR_LOG_HEADER - EE_LOG_MAGIC]);
+    log_status->normal_offset = Buffer_To_BE32(&buf[EE_NORMAL_LOG_OFFSET - EE_LOG_MAGIC]);
+    log_status->normal_header = Buffer_To_BE32(&buf[EE_NORMAL_LOG_HEADER - EE_LOG_MAGIC]);
+    return status;
+  }
+}
+
+osStatus_t Update_Log_Status(LogFileState *log_status)
+{
+  uint8_t buf[32] = {0xFF};
+  
+  BE32_To_Buffer(log_status->magic, &buf[EE_LOG_MAGIC - EE_LOG_MAGIC]);
+  BE32_To_Buffer(log_status->error_offset, &buf[EE_ERROR_LOG_OFFSET - EE_LOG_MAGIC]);
+  BE32_To_Buffer(log_status->error_header, &buf[EE_ERROR_LOG_HEADER - EE_LOG_MAGIC]);
+  BE32_To_Buffer(log_status->normal_offset, &buf[EE_NORMAL_LOG_OFFSET - EE_LOG_MAGIC]);
+  BE32_To_Buffer(log_status->normal_header, &buf[EE_NORMAL_LOG_HEADER - EE_LOG_MAGIC]);
+  BE32_To_Buffer(log_status->magic_2, &buf[EE_LOG_MAGIC_2 - EE_LOG_MAGIC]);
+
+  return RTOS_EEPROM_Write(EEPROM_ADDR, EE_LOG_MAGIC, buf, sizeof(buf));
+}
+
+osStatus_t Reset_Log_Status()
+{
+  uint8_t buf[32] = {0xFF};
+
+  return RTOS_EEPROM_Write(EEPROM_ADDR, EE_LOG_MAGIC, buf, sizeof(buf));
+}
 
 osStatus_t Get_Up_Status(UpgradeFlashState *up_status)
 {
@@ -382,7 +525,7 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   index = Get_Index_Of_Channel_Map(switch_channel, pos);
   if (index < 0) {
     EPT("Invalid switch channel number : %u %u\n", switch_channel, pos);
-    THROW_LOG("Invalid switch channel number : %u %u\n", switch_channel, pos);
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Invalid switch channel number : %u %u\n", switch_channel, pos);
     return -2;
   }
 
@@ -421,7 +564,7 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   EPT("First switch DA/AD value: val_x = %d, std_x = %d, val_y = %d, std_y = %d\n", val_x, std_x, val_y, std_y);
   if (!Is_Value_Approximate(val_x, my_abs(std_x), 0.05) || !Is_Value_Approximate(val_y, my_abs(std_y), 0.05)) {
     EPT("First level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
-    THROW_LOG("First level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "First level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
     return -5;
   }
 
@@ -464,7 +607,7 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   EPT("Second switch DA/AD value: val_x = %d, std_x = %d, val_y = %d, std_y = %d\n", val_x, std_x, val_y, std_y);
   if (!Is_Value_Approximate(val_x, my_abs(std_x), 0.05) || !Is_Value_Approximate(val_y, my_abs(std_y), 0.05)) {
     EPT("Second level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
-    THROW_LOG("Second level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Second level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
     return -9;
   }
 
@@ -668,6 +811,24 @@ inline void Clear_Alarm(void)
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
 }
 
+void Set_Lazer_Ready(void)
+{
+  HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_SET);
+  osDelay(pdMS_TO_TICKS(1));
+  HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
+  run_status.lazer_ready = 1;
+}
+
+void Clear_Lazer_Ready(void)
+{
+  HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_SET);
+  osDelay(pdMS_TO_TICKS(1));
+  HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
+  run_status.lazer_ready = 0;
+}
+
 void Init_Run_Status(void)
 {
   run_status.maigc = RUN_MAGIC;
@@ -683,11 +844,11 @@ void Init_Run_Status(void)
   } else {
     run_status.tx_block = 0;
   }
-  if (HAL_GPIO_ReadPin(PRO_DIS_N_GPIO_Port, PRO_DIS_N_Pin) == GPIO_PIN_RESET) {
-    run_status.tosa_enable = 1;
-  } else {
-    run_status.tosa_enable = 0;
-  }
+  run_status.tosa_enable = 0;
+  run_status.lazer_ready = 0;
+  run_status.osc_status = OSC_FAILURE;
+  run_status.tosa_dst_power_high = 0;
+  run_status.tosa_dst_power_low = -4;
 }
 
 void Set_Switch_Ready(uint8_t switch_channel)
@@ -772,18 +933,19 @@ uint8_t Enable_Tosa()
   osStatus_t status;
   uint32_t i = 0;
 
-  status = RTOS_DAC128S085_Write(1, 4095, DAC128S085_MODE_NORMAL);
+  status = RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 4095, DAC128S085_MODE_NORMAL);
   if (status != osOK) {
     return 1;
   }
   while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-    osDelay(1);
+    osDelay(10);
     if (++i > 100) {
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
       Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
       return 2;
     }
   }
-  status = RTOS_DAC128S085_Write(2, 4095, DAC128S085_MODE_NORMAL);
+  status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 4095, DAC128S085_MODE_NORMAL);
   if (status != osOK) {
     return 3;
   }
@@ -795,8 +957,8 @@ uint8_t Disable_Tosa()
 {
   osStatus_t status;
 
-  status = RTOS_DAC128S085_Write(2, 0, DAC128S085_MODE_NORMAL);
-  status |= RTOS_DAC128S085_Write(1, 0, DAC128S085_MODE_NORMAL);
+  status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
 
   if (status != osOK) {
     Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
@@ -909,6 +1071,67 @@ TosaCalData Cal_Tosa_Data(TosaCalData tosa_node_1, TosaCalData tosa_node_2, doub
   
   return tosa_data;
 }
+
+uint8_t Get_Tap_Power(double *cur_power)
+{
+  uint8_t i = 0, times = 0;
+  uint16_t tap_adc;
+  double tap_power, pre_power, first_power;
+
+  while (1) {
+    if (get_tap_pd_power(&tap_adc, &tap_power)) {
+      return 1;
+    }
+    
+    if (i == 0) {
+      pre_power = tap_power;
+      first_power = pre_power;
+      i++;
+    } else if (i < 10) {
+      if ((tap_power <= pre_power + 0.3 && tap_power >= pre_power - 0.3) && \
+        (tap_power <= first_power + 0.5 && tap_power >= first_power - 0.5)) {
+        i++;
+        pre_power = (pre_power + tap_power) / 2;
+      } else {
+        i = 0;
+        times++;
+      }
+    } else {
+      break;
+    }
+    
+    if (times > 3) {
+      break;
+    }
+    osDelay(pdMS_TO_TICKS(15));
+  }
+  
+  if (times > 3) {
+    return 2;
+  } else {
+    *cur_power = pre_power;
+  }
+  
+  return 0;
+}
+
+uint8_t Get_Rx_Power(double *cur_power)
+{
+  uint8_t i = 0;
+  uint16_t rx_adc;
+  double rx_power, sum;
+
+  for (i = 0, sum = 0; i < 10; ++i) {
+    if (get_rx_pd_power(&rx_adc, &rx_power)) {
+      return 1;
+    }
+    sum += rx_power;
+    osDelay(pdMS_TO_TICKS(15));
+  }
+  *cur_power = sum / i;
+  return 0;
+}
+
 
 uint8_t cal_tap_pd_by_power(uint16_t *adc, double power)
 {
@@ -1162,7 +1385,7 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
       BE32_To_Buffer(0x80000000, pBuf);
       break;
     case 5:
-      if (run_status.tosa_enable) {
+      if (run_status.lazer_ready) {
         BE32_To_Buffer(1, pBuf);
       } else {
         BE32_To_Buffer(0, pBuf);
@@ -1344,6 +1567,7 @@ uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
     case 2:
       break;
     case 3:
+#if 0
       run_status.thr_table.tec_cur_low_alarm = (double)val32_low;
       if (run_status.thr_table.tec_cur_low_alarm < 0)
         run_status.thr_table.tec_cur_low_clear = run_status.thr_table.tec_cur_low_alarm * 0.99;
@@ -1355,8 +1579,10 @@ uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
         run_status.thr_table.tec_cur_high_clear = run_status.thr_table.tec_cur_high_alarm * 1.01;
       else
         run_status.thr_table.tec_cur_high_clear = run_status.thr_table.tec_cur_high_alarm * 0.99;
+#endif
       break;
     case 4:
+#if 0
       run_status.thr_table.tec_vol_low_alarm = (double)val32_low;
       if (run_status.thr_table.tec_vol_low_alarm < 0)
         run_status.thr_table.tec_vol_low_clear = run_status.thr_table.tec_vol_low_alarm * 0.99;
@@ -1368,6 +1594,7 @@ uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
         run_status.thr_table.tec_vol_high_clear = run_status.thr_table.tec_vol_high_alarm * 1.01;
       else
         run_status.thr_table.tec_vol_high_clear = run_status.thr_table.tec_vol_high_alarm * 0.99;
+#endif
       break;
     case 5:
       run_status.thr_table.vol_5_0_low_alarm = (double)val32_low / 100;
@@ -1434,16 +1661,26 @@ uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf)
       BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
       break;
     case 3:
+#if 0
       val32 = (int32_t)run_status.thr_table.tec_cur_low_alarm;
       BE32_To_Buffer(val32, pBuf);
       val32 = (int32_t)run_status.thr_table.tec_cur_high_alarm;
       BE32_To_Buffer(val32, pBuf + 4);
+#else
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+#endif
       break;
     case 4:
+#if 0
       val32 = (int32_t)run_status.thr_table.tec_vol_low_alarm;
       BE32_To_Buffer(val32, pBuf);
       val32 = (int32_t)run_status.thr_table.tec_vol_high_alarm;
       BE32_To_Buffer(val32, pBuf + 4);
+#else
+      BE32_To_Buffer(0x80000000, pBuf);
+      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+#endif
       break;
     case 5:
       val32 = (int32_t)(run_status.thr_table.vol_5_0_low_alarm * 100 + 0.5);
@@ -1561,6 +1798,7 @@ uint8_t debug_sw_adc(uint8_t sw_num)
   if (sw_num >= SWITCH_NUM_TOTAL || sw_num == 0) {
     return RESPOND_FAILURE;
   }
+  THROW_LOG(MSG_TYPE_NORMAL_LOG, "run_status size is %u\n", sizeof(RunTimeStatus));
 
   for (i = 0; i < sizeof(switch_map)/sizeof(switch_map[0]); ++i) {
     if (switch_map[i].sw_num == sw_num)
@@ -1607,8 +1845,9 @@ uint8_t debug_tag(uint8_t type, uint8_t *p, uint32_t length)
 {
   osStatus_t status;
   uint16_t addr;
-  uint8_t buf[TAG_MAX_SPACE] = {0x20};
+  uint8_t buf[TAG_MAX_SPACE];
 
+  memset(buf, 0x20, TAG_MAX_SPACE);
   if (type > 4 || length > TAG_MAX_SPACE) {
     return RESPOND_FAILURE;
   }
@@ -1634,7 +1873,7 @@ uint8_t debug_tag(uint8_t type, uint8_t *p, uint32_t length)
   }
 
   memcpy(buf, p, length);
-  status = RTOS_EEPROM_Write(EEPROM_ADDR, addr, buf, sizeof(buf));
+  status = RTOS_EEPROM_Write(EEPROM_ADDR, addr, buf, TAG_MAX_SPACE);
 
   if (status != osOK) {
     EPT("Read adc failed\n");
@@ -1922,6 +2161,24 @@ uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len)
   }
   
   *resp_len = len;
+  return RESPOND_SUCCESS;
+}
+
+uint8_t debug_eeprom(uint32_t addr, uint32_t *len)
+{
+  osStatus_t status;
+
+  if (*len > 240) {
+    *len = 0;
+    return RESPOND_INVALID_PARA;
+  }
+  status = RTOS_EEPROM_Read(EEPROM_ADDR, addr, resp_buf.buf, *len);
+  if (status != osOK) {
+    EPT("Read EEPROM failed, status = %d\n", status);
+    *len = 4;
+    return RESPOND_FAILURE;
+  }
+  
   return RESPOND_SUCCESS;
 }
 

@@ -17,7 +17,9 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.3"; // 4 bytes
+char *fw_version = "S0.5"; // 4 bytes
+
+extern osMessageQueueId_t mid_LazerManager;
 
 extern UpgradeFlashState upgrade_status;
 
@@ -37,6 +39,8 @@ CmdStruct command_list[] = {
   {CMD_RX_PD_CALI, 4, Cmd_RX_PD_CALI},
   {CMD_TAP_PD_CALI, 4, Cmd_TAP_PD_CALI},
   {CMD_QUERY_VOLTAGE, 4, Cmd_Voltage},
+  {CMD_LOOPBACK_TEST, 5, Cmd_Loopback_Test},
+  {CMD_LOOPBACK_RESULT, 4, Cmd_Loopback_Result},
   {CMD_QUERY_ALARM, 4, Cmd_Query_Alarm},
   {CMD_SET_MODULATION, 5, Cmd_Set_Modulation},
   {CMD_QUERY_MODULATION, 4, Cmd_Query_Modulation},
@@ -48,9 +52,11 @@ CmdStruct command_list[] = {
   {CMD_SOFTRESET, 4, Cmd_Softreset},
   {CMD_SET_LOG_TIME, 0xA, Cmd_Set_Time},
   {CMD_QUERY_LOG_TIME, 4, Cmd_Get_Time},
+  {CMD_QUERY_PERFORMANCE, 0xFFFF, Cmd_Performance},
   {CMD_SET_THRESHOLD, 0xD, Cmd_Set_Threshold},
   {CMD_QUERY_THRESHOLD, 5, Cmd_Query_Threshold},
-  {CMD_QUERY_PERFORMANCE, 0xFFFF, Cmd_Performance},
+  {CMD_QUERY_LOG_SIZE, 5, Cmd_LOG_Size},
+  {CMD_GET_LOG_CONTENT, 0xA, Cmd_LOG_Content},
 
   {CMD_FOR_DEBUG, 0xFFFF, Cmd_For_Debug},
 };
@@ -72,7 +78,7 @@ uint8_t Cmd_Process()
       }
       if (command_list[i].cmd_std_len != 0xFFFF) {
         if (cmd_length != (uint8_t)command_list[i].cmd_std_len) {
-          THROW_LOG("Command %#X Length %#X invalid\n", cmd_id, cmd_length);
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Command %#X Length %#X invalid\n", cmd_id, cmd_length);
           FILL_RESP_MSG(cmd_id, RESPOND_INVALID_PARA, 0);
           return RESPOND_INVALID_PARA;
         }
@@ -81,7 +87,7 @@ uint8_t Cmd_Process()
     }
   }
 
-  THROW_LOG("Unknow command id = %#X\n", cmd_id);
+  THROW_LOG(MSG_TYPE_NORMAL_LOG, "Unknow command id = %#X\n", cmd_id);
   FILL_RESP_MSG(cmd_id, RESPOND_UNKNOWN_CMD, 0);
   return RESPOND_UNKNOWN_CMD;
 }
@@ -102,7 +108,7 @@ int Uart_Respond(uint16_t cmd, uint8_t status, uint8_t *pdata, uint8_t len)
   trans_buf.buf[cmd_len++] = Cal_Check((uint8_t*)&trans_buf.buf[CMD_SEQ_MSG_LENGTH], 1 + 2 + len + 1);
   
   if (HAL_UART_Transmit(&huart1, trans_buf.buf, cmd_len, 0xFF) != HAL_OK) {
-    THROW_LOG("Respond command failed, ErrorCode = %#X\n", huart1.ErrorCode);
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Respond command failed, ErrorCode = %#X\n", huart1.ErrorCode);
     EPT("Respond command failed, ErrorCode = %#X\n", huart1.ErrorCode);
       return -1;
   } else {
@@ -186,41 +192,41 @@ uint8_t Cmd_Set_Switch(void)
   if (switch_channel == TX_SWITCH_CHANNEL) {
     if (HAL_GPIO_ReadPin(SW1_MODE_SEL_GPIO_Port, SW1_MODE_SEL_Pin) == GPIO_PIN_RESET) {
       EPT("Switch 2x32 command come but switch mode is wrong\n");
-      THROW_LOG("Switch 2x32 command come but switch mode is wrong\n");
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch 2x32 command come but switch mode is wrong\n");
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
       return RESPOND_FAILURE;
     }
     
     if(switch_pos > 0x3F) {
       EPT("Switch 2x32 command parameter is invalid\n");
-      THROW_LOG("Switch 2x32 command parameter is invalid\n");
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch 2x32 command parameter is invalid\n");
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
   } else if (switch_channel == RX_SWITCH_CHANNEL) {
     if (HAL_GPIO_ReadPin(SW2_MODE_SEL_GPIO_Port, SW2_MODE_SEL_Pin) == GPIO_PIN_RESET) {
       EPT("Switch 1x32 command come but switch mode is wrong\n");
-      THROW_LOG("Switch 1x32 command come but switch mode is wrong\n");
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch 1x32 command come but switch mode is wrong\n");
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
       return RESPOND_FAILURE;
     }
     
     if(switch_pos > 0x1F) {
       EPT("Switch 1x32 command parameter is invalid\n");
-      THROW_LOG("Switch 1x32 command parameter is invalid\n");
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch 1x32 command parameter is invalid\n");
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
   } else {
     EPT("Switch command parameter is invalid\n");
-    THROW_LOG("Switch command parameter is invalid\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch command parameter is invalid\n");
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
   
   if (run_status.tx_block && switch_channel == TX_SWITCH_CHANNEL) {
     EPT("Switch is blocked\n");
-    THROW_LOG("Switch is blocked\n\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked\n\n");
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -234,7 +240,7 @@ uint8_t Cmd_Set_Switch(void)
       run_status.rx_switch_channel = 0xFF;
     }
     EPT("Set switch channel failed\n");
-    THROW_LOG("Set switch channel failed\n");
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed\n");
     if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
       Set_Flag(&run_status.exp, EXP_SWITCH);
     }
@@ -252,7 +258,7 @@ uint8_t Cmd_Set_Switch(void)
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
     Reset_Switch(switch_channel);
     EPT("Set switch channel failed 2\n");
-    THROW_LOG("Set switch channel failed 2\n");
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
     if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
       Set_Flag(&run_status.exp, EXP_SWITCH);
     }
@@ -313,7 +319,7 @@ uint8_t Cmd_Get_Switch(void)
     return RESPOND_SUCCESS;
   } else {
     EPT("Switch command parameter is invalid\n");
-    THROW_LOG("Switch command parameter is invalid\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch command parameter is invalid\n");
     FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_INVALID_PARA, 2);
     return RESPOND_INVALID_PARA;
   }
@@ -391,17 +397,17 @@ uint8_t Cmd_Query_Tosa_Thr()
   BE16_To_Buffer((uint16_t)power, resp_buf.buf + 4);
   power = (int16_t)(tosa_power_low_min_thr * 100);
   BE16_To_Buffer((uint16_t)power, resp_buf.buf + 6);
-  FILL_RESP_MSG(CMD_QUERY_TOSA, RESPOND_SUCCESS, 8);
+  FILL_RESP_MSG(CMD_QUERY_TOSA_THR, RESPOND_SUCCESS, 8);
   return RESPOND_SUCCESS;
 }
 
 uint8_t Cmd_Set_Tosa()
 {
-  uint32_t i = 0;
   int16_t val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA));
   double power_h, power_l;
-  osStatus_t status;
-  
+
+  MsgStruct msg;
+
   power_h = (double)val / 100;
   val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA + 2));
   power_l = (double)val / 100;
@@ -419,34 +425,15 @@ uint8_t Cmd_Set_Tosa()
     return RESPOND_INVALID_PARA;
   }
 
-  run_status.tosa_high = Get_Tosa_Data(power_h);
-  run_status.tosa_low = Get_Tosa_Data(power_l);
-  if (run_status.tosa_high.tosa_dac) {
-    if (run_status.modulation) {
-      status = RTOS_DAC128S085_Write(0, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
-    } else {
-      status = RTOS_DAC128S085_Write(0, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
-    }
-    if (status != osOK) {
-      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-    }
-
-    if (run_status.tosa_enable) {
-    // TODO: wait until tec ready
-      while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-        osDelay(1);
-        if (++i > 100) {
-          Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
-          FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
-          return RESPOND_FAILURE;
-        }
-      }
-    }
-
-    if (!run_status.modulation) {
-      DAC5541_Write(run_status.tosa_high.tosa_dac);
-    }
-  }
+  Clear_Lazer_Ready();
+  msg.pbuf = pvPortMalloc(8);
+  msg.length = 8;
+  msg.type = MSG_TYPE_LAZER_POWER;
+  BE32_To_Buffer((int32_t)(power_h * 100), (uint8_t*)msg.pbuf);
+  BE32_To_Buffer((int32_t)(power_l * 100), (uint8_t*)msg.pbuf + 4);
+  osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
+  run_status.tosa_dst_power_high = power_h;
+  run_status.tosa_dst_power_low = power_l;
 
   FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_SUCCESS, 0);
   return RESPOND_SUCCESS;
@@ -456,9 +443,9 @@ uint8_t Cmd_Query_Tosa()
 {
   uint16_t power;
   
-  power = (int16_t)(run_status.tosa_high.tap_power * 100);
+  power = (int16_t)(run_status.tosa_dst_power_high * 100);
   BE16_To_Buffer((uint16_t)power, resp_buf.buf);
-  power = (int16_t)(run_status.tosa_low.tap_power * 100);
+  power = (int16_t)(run_status.tosa_dst_power_low * 100);
   BE16_To_Buffer((uint16_t)power, resp_buf.buf + 2);
   FILL_RESP_MSG(CMD_QUERY_TOSA, RESPOND_SUCCESS, 4);
   return RESPOND_SUCCESS;
@@ -593,6 +580,47 @@ uint8_t Cmd_Voltage()
   return RESPOND_SUCCESS;
 }
 
+uint8_t Cmd_Loopback_Test(void)
+{
+  MsgStruct msg;
+
+  if (trans_buf.buf[CMD_SEQ_MSG_DATA] != 1) {
+    FILL_RESP_MSG(CMD_LOOPBACK_TEST, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+  
+  if (!run_status.lazer_ready) {
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Lazer is not ready\n");
+    FILL_RESP_MSG(CMD_LOOPBACK_TEST, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+
+  if (run_status.modulation) {
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module in modulation mode\n");
+    FILL_RESP_MSG(CMD_LOOPBACK_TEST, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+  
+  if (run_status.tx_block) {
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "TX Switch is blocked\n");
+    FILL_RESP_MSG(CMD_LOOPBACK_TEST, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+  
+  msg.type = MSG_TYPE_SELF_TEST;
+  osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
+
+  FILL_RESP_MSG(CMD_LOOPBACK_TEST, RESPOND_SUCCESS, 0);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_Loopback_Result(void)
+{
+  resp_buf.buf[0] = run_status.osc_status;
+  FILL_RESP_MSG(CMD_LOOPBACK_RESULT, RESPOND_SUCCESS, 1);
+  return RESPOND_SUCCESS;
+}
+
 uint8_t Cmd_Query_Alarm(void)
 {
   BE32_To_Buffer(run_status.exp, resp_buf.buf);
@@ -603,53 +631,35 @@ uint8_t Cmd_Query_Alarm(void)
 uint8_t Cmd_Set_Modulation(void)
 {
   int8_t val = trans_buf.buf[CMD_SEQ_MSG_DATA];
-  osStatus_t status;
-  uint32_t i;
+  MsgStruct msg;
   
   if (val == 0) {
     if (run_status.modulation) {
+      Clear_Lazer_Ready();
       HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_1);
       HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_3);
       run_status.modulation = 0;
-      status = RTOS_DAC128S085_Write(0, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
-      if (status != osOK) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-      }
-      if (run_status.tosa_enable) {
-      // TODO: wait until tec ready
-        while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-          osDelay(1);
-          if (++i > 100) {
-            Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
-            FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
-            return RESPOND_FAILURE;
-          }
-        }
-      }
 
-      DAC5541_Write(run_status.tosa_high.tosa_dac);
+      msg.pbuf = pvPortMalloc(8);
+      msg.length = 8;
+      msg.type = MSG_TYPE_LAZER_POWER;
+      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf);
+      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf + 4);
+      osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
     }
   } else if (val == 1) {
     if (!run_status.modulation) {
-      status = RTOS_DAC128S085_Write(0, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
-      if (status != osOK) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-      }
-      if (run_status.tosa_enable) {
-      // TODO: wait until tec ready
-        while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-          osDelay(1);
-          if (++i > 100) {
-            Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
-            FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
-            return RESPOND_FAILURE;
-          }
-        }
-      }
-
+      Clear_Lazer_Ready();
       HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
       HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
       run_status.modulation = 1;
+
+      msg.pbuf = pvPortMalloc(8);
+      msg.length = 8;
+      msg.type = MSG_TYPE_LAZER_POWER;
+      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf);
+      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf + 4);
+      osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
     }
   } else {
     FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_INVALID_PARA, 0);
@@ -732,13 +742,13 @@ uint8_t Cmd_Upgrade_Data()
   
   if (trans_buf.buf[CMD_SEQ_MSG_LENGTH] != 0x86) {
     EPT("Upgrade data length invalid\n");
-    THROW_LOG("Upgrade data length invalid\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Upgrade data length invalid\n");
     FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
   if (up_state.run != RUN_MODE_UPGRADE) {
     EPT("Cannot excute command because of wrong mode\n");
-    THROW_LOG("Cannot excute command because of wrong mode\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Cannot excute command because of wrong mode\n");
     FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -747,7 +757,7 @@ uint8_t Cmd_Upgrade_Data()
     if (strncmp((char*)&p_fw_data[FW_HEAD_MODULE_PN], pn, 8) || 
           strncmp((char*)&p_fw_data[FW_HEAD_MODULE_HW], hw_version, 3)) {
       EPT("The file is not the firmware corresponding to this module\n");
-      THROW_LOG("The file is not the firmware corresponding to this module\n");
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "The file is not the firmware corresponding to this module\n");
       FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
       return RESPOND_FAILURE;
     }
@@ -764,7 +774,7 @@ uint8_t Cmd_Upgrade_Data()
           EPT("Flash in using for upgrading...\n");
         } else {
           EPT("Flash in using for other functions...\n");
-          THROW_LOG("Flash in using for other functions...\n");
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Flash in using for other functions...\n");
           osDelay(pdMS_TO_TICKS(600));
           FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
           return RESPOND_FAILURE;
@@ -794,7 +804,7 @@ uint8_t Cmd_Upgrade_Data()
       EPT("Fw size = %u, crc = %#X\n", up_state.fw_size, up_state.crc32);
       if (up_state.fw_size > 0x18000) {
         EPT("File size(%#X) exceeds limit\n", up_state.fw_size);
-        THROW_LOG("File size(%#X) exceeds limit\n", up_state.fw_size);
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "File size(%#X) exceeds limit\n", up_state.fw_size);
         up_state.pre_state = UPGRADE_FAILURE;
         FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
         return RESPOND_FAILURE;
@@ -803,7 +813,7 @@ uint8_t Cmd_Upgrade_Data()
       length = 0;
     } else {
       EPT("Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
-      THROW_LOG("Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
       FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
       return RESPOND_FAILURE;
     }
@@ -813,7 +823,7 @@ uint8_t Cmd_Upgrade_Data()
     length = 128;
   } else {
     EPT("Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
-    THROW_LOG("Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Seq invalid : %u\tpre_seq : %u\n", seq, up_state.pre_seq);
     FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -828,7 +838,7 @@ uint8_t Cmd_Upgrade_Data()
       return RESPOND_SUCCESS;
     }
     EPT("Waiting flash timeout\n");
-    THROW_LOG("Waiting flash timeout\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Waiting flash timeout\n");
     up_state.pre_state = UPGRADE_FAILURE;
     FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 8);
     return RESPOND_FAILURE;
@@ -860,21 +870,21 @@ uint8_t Cmd_Upgrade_Install()
 
   if (up_state.run != RUN_MODE_UPGRADE) {
     EPT("Cannot excute cmd beacuse of wrong mode\n");
-    THROW_LOG("Cannot excute command because of wrong mode\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Cannot excute command because of wrong mode\n");
     FILL_RESP_MSG(CMD_UPGRADE_RUN, RESPOND_FAILURE, 0);
     return RESPOND_UNKNOWN_CMD;
   }
 
   if (up_state.recvd_length < up_state.fw_size) {
     EPT("The received length %u is less than the length in header %u.\n", up_state.recvd_length, up_state.fw_size);
-    THROW_LOG("The received length %u is less than the length in header %u.\n", up_state.recvd_length, up_state.fw_size);
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "The received length %u is less than the length in header %u.\n", up_state.recvd_length, up_state.fw_size);
     FILL_RESP_MSG(CMD_UPGRADE_RUN, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
 
   if (up_state.pre_seq < 3) {
     EPT("No valid data.\n");
-    THROW_LOG("No valid data.\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "No valid data.\n");
     FILL_RESP_MSG(CMD_UPGRADE_RUN, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -883,7 +893,7 @@ uint8_t Cmd_Upgrade_Install()
   uint32_t crc = Cal_CRC32(pdata, up_state.fw_size);
   if (crc ^ up_state.crc32) {
     EPT("CRC verified failed. %#X != %#X\n", crc, up_state.crc32);
-    THROW_LOG("CRC verified failed. %#X != %#X\n", crc, up_state.crc32);
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "CRC verified failed. %#X != %#X\n", crc, up_state.crc32);
     FILL_RESP_MSG(CMD_UPGRADE_RUN, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -896,12 +906,12 @@ uint8_t Cmd_Upgrade_Install()
                 upgrade_status.factory_length, upgrade_status.factory_crc32);
   if (Update_Up_Status(&upgrade_status) != osOK) {
     EPT("Update upgrade status to eeprom failed\n");
-    THROW_LOG("Update upgrade status to eeprom failed\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Update upgrade status to eeprom failed\n");
     FILL_RESP_MSG(CMD_UPGRADE_RUN, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
 
-  THROW_LOG("Upgrade firmware success\n");
+  THROW_LOG(MSG_TYPE_NORMAL_LOG, "Upgrade firmware success\n");
   Uart_Respond(CMD_UPGRADE_RUN, RESPOND_SUCCESS, NULL, 0);
   __NVIC_SystemReset();
   while (1) {
@@ -1033,6 +1043,191 @@ uint8_t Cmd_Query_Threshold(void)
   return RESPOND_SUCCESS;
 }
 
+uint8_t Cmd_LOG_Size(void)
+{
+  uint8_t type = trans_buf.buf[CMD_SEQ_MSG_DATA];
+  int32_t size;
+  
+  resp_buf.buf[0] = type;
+  if (type > 0x02) {
+    BE32_To_Buffer(0, resp_buf.buf + 1);
+  } else if (type == 0x00){
+    size = (EE_PARA_TABLE_END - EE_CAL_SWITCH1 + 1);
+    BE32_To_Buffer(size, resp_buf.buf + 1);
+  } else if (type == 0x01){
+    size = log_file_state.error_offset - log_file_state.error_header;
+    if (log_file_state.error_offset < log_file_state.error_header) {
+      size += (error_file_flash_end + 1) - error_file_flash_addr[0];
+    }
+
+    BE32_To_Buffer(size, resp_buf.buf + 1);
+  } else if (type == 0x02){
+    size = log_file_state.normal_offset - log_file_state.normal_header;
+    if (log_file_state.normal_offset < log_file_state.normal_header) {
+      size += (normal_file_flash_end + 1) - normal_file_flash_addr[0];
+    }
+
+    BE32_To_Buffer(size, resp_buf.buf + 1);
+  }
+
+  FILL_RESP_MSG(CMD_QUERY_LOG_SIZE, RESPOND_SUCCESS, 5);
+  return RESPOND_SUCCESS;
+}
+
+uint8_t Cmd_LOG_Content(void)
+{
+  uint8_t type = trans_buf.buf[CMD_SEQ_MSG_DATA];
+  uint8_t len = trans_buf.buf[CMD_SEQ_MSG_DATA + 1];
+  uint32_t addr = Buffer_To_BE32(trans_buf.buf + CMD_SEQ_MSG_DATA + 2);
+  int32_t size;
+  int32_t rest;
+
+  if (len > 200 || len == 0) {
+    FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  }
+
+  if (flash_in_use) {
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Reading log content when flash in using\n");
+    FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+
+  resp_buf.buf[0] = type;
+  resp_buf.buf[1] = len;
+  BE32_To_Buffer(addr, resp_buf.buf + 2);
+
+  if (type > 0x02) {
+    FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_INVALID_PARA, 0);
+    return RESPOND_INVALID_PARA;
+  } else if (type == 0x00){
+    size = (EE_PARA_TABLE_END - EE_CAL_SWITCH1 + 1);
+    if (addr + len > size) {
+      FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_INVALID_PARA, 0);
+      return RESPOND_INVALID_PARA;
+    }
+    if (RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_SWITCH1 + addr, resp_buf.buf + 6, len) != osOK) {
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "Read EEPROM failed\n");
+      FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_FAILURE, 0);
+      return RESPOND_FAILURE;
+    }
+  } else if (type == 0x01){
+    size = log_file_state.error_offset - log_file_state.error_header;
+    if (log_file_state.error_offset < log_file_state.error_header) {
+      size += (error_file_flash_end + 1) - error_file_flash_addr[0];
+    }
+    if (addr + len > size) {
+      FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_INVALID_PARA, 0);
+      return RESPOND_INVALID_PARA;
+    }
+    if (log_file_state.error_offset > log_file_state.error_header) {
+      Log_Read(log_file_state.error_header + addr, resp_buf.buf + 6, len);
+    } else {
+      if (log_file_state.error_header + addr > error_file_flash_end + 1) {
+        Log_Read(addr - (error_file_flash_end - log_file_state.error_header + 1) + error_file_flash_addr[0], resp_buf.buf + 6, len);
+      } else {
+        if (log_file_state.error_header + addr + len <= error_file_flash_end + 1) {
+          Log_Read(log_file_state.error_header + addr, resp_buf.buf + 6, len);
+        } else {
+          rest = error_file_flash_end + 1 - (log_file_state.error_header + addr);
+          Log_Read(log_file_state.error_header + addr, resp_buf.buf + 6, rest);
+          rest = len - rest;
+          Log_Read(error_file_flash_addr[0], resp_buf.buf + 6 + (len - rest), rest);
+        }
+      }
+    }
+  } else if (type == 0x02){
+    size = log_file_state.normal_offset - log_file_state.normal_header;
+    if (log_file_state.normal_offset < log_file_state.normal_header) {
+      size += (normal_file_flash_end + 1) - normal_file_flash_addr[0];
+    }
+    if (addr + len > size) {
+      FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_INVALID_PARA, 0);
+      return RESPOND_INVALID_PARA;
+    }
+    if (log_file_state.normal_offset > log_file_state.normal_header) {
+      Log_Read(log_file_state.normal_header + addr, resp_buf.buf + 6, len);
+    } else {
+      if (log_file_state.normal_header + addr > normal_file_flash_end + 1) {
+        Log_Read(addr - (normal_file_flash_end - log_file_state.normal_header + 1) + normal_file_flash_addr[0], resp_buf.buf + 6, len);
+      } else {
+        if (log_file_state.normal_header + addr + len <= normal_file_flash_end + 1) {
+          Log_Read(log_file_state.normal_header + addr, resp_buf.buf + 6, len);
+        } else {
+          rest = normal_file_flash_end + 1 - (log_file_state.normal_header + addr);
+          Log_Read(log_file_state.normal_header + addr, resp_buf.buf + 6, rest);
+          rest = len - rest;
+          Log_Read(normal_file_flash_addr[0], resp_buf.buf + 6 + (len - rest), rest);
+        }
+      }
+    }
+  }
+
+  FILL_RESP_MSG(CMD_GET_LOG_CONTENT, RESPOND_SUCCESS, 6 + len);
+  return RESPOND_SUCCESS;
+}
+#if 0
+uint32_t Cmd_LOG_Content()
+{
+  uint8_t *prdata = trans_buf.buf + CMD_SEQ_MSG_DATA;
+  uint32_t packet_count, packet_num;
+  uint32_t addr;
+  int32_t size;
+
+  size = log_file_state.offset - log_file_state.header;
+  if (log_file_state.offset < log_file_state.header) {
+    size += (file_flash_end + 1) - file_flash_addr[0];
+  }
+  packet_count = size / LOG_PACKET_LENGTH;
+  if (size)
+    packet_count += 1;
+
+  //packet_count = Buffer_To_BE32(prdata);
+  if (packet_count != Buffer_To_BE32(prdata)) {
+    EPT("Wrong number of packages\n");
+    THROW_LOG("Wrong number of packages\n");
+    BE32_To_Buffer((uint32_t)packet_count, resp_buf.buf);
+    BE32_To_Buffer((uint32_t)0, resp_buf.buf + 4);
+    BE32_To_Buffer((uint32_t)0, resp_buf.buf + 8);
+    size = 0;
+    FILL_RESP_MSG(CMD_QUERY_LOG, RESPOND_SUCCESS, 12 + size);
+    return RESPOND_SUCCESS;
+  }
+  packet_num = Buffer_To_BE32(prdata + 4);
+  if (packet_num > packet_count || packet_num == 0) {
+    EPT("packet number = %u is invalid\n", packet_num);
+    THROW_LOG("packet number = %u is invalid\n", packet_num);
+    BE32_To_Buffer((uint32_t)packet_count, resp_buf.buf);
+    BE32_To_Buffer((uint32_t)0, resp_buf.buf + 4);
+    BE32_To_Buffer((uint32_t)0, resp_buf.buf + 8);
+    size = 0;
+    FILL_RESP_MSG(CMD_QUERY_LOG, RESPOND_SUCCESS, 12 + size);
+    return RESPOND_SUCCESS;
+  }
+  addr = log_file_state.header + (packet_num - 1) * LOG_PACKET_LENGTH;
+  if (addr >= file_flash_end + 1) {
+    addr = addr - (file_flash_end + 1) + file_flash_addr[0];
+  }
+  if (packet_count == packet_num) {
+    size = log_file_state.offset - addr;
+    if (size > LOG_PACKET_LENGTH)
+      size = LOG_PACKET_LENGTH;
+  } else {
+    size = LOG_PACKET_LENGTH;
+  }
+  if (flash_in_use) {
+    THROW_LOG("Reading log when flash in using\n");
+    size = 0;
+  }
+  EPT("packet_num = %u, dest addr = %#X, size = %u\n", packet_num, addr, size);
+  BE32_To_Buffer((uint32_t)packet_count, resp_buf.buf);
+  BE32_To_Buffer((uint32_t)packet_num, resp_buf.buf + 4);
+  BE32_To_Buffer((uint32_t)size, resp_buf.buf + 8);
+  Log_Read(addr, resp_buf.buf + 12, size);
+  FILL_RESP_MSG(CMD_QUERY_LOG, RESPOND_SUCCESS, 12 + size);
+  return RESPOND_SUCCESS;
+}
+#endif
 uint8_t Cmd_For_Debug()
 {
   uint8_t *prdata = trans_buf.buf + CMD_SEQ_MSG_DATA;
@@ -1127,6 +1322,23 @@ uint8_t Cmd_For_Debug()
     ret = debug_cal_dump(sw_num, &u_val);
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, u_val);
     return ret;
+  } else if (temp == CMD_DEBUG_EEPROM) {
+    memset(resp_buf.buf, 0, 4);
+    sw_num = Buffer_To_BE32(prdata + 8);
+    u_val = Buffer_To_BE32(prdata + 12);
+    ret = debug_eeprom(sw_num, &u_val);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, u_val);
+    return ret;
+  } else if (temp == CMD_DEBUG_RESET_LOG) {
+    memset(resp_buf.buf, 0, 4);
+    if (Reset_Log_Status() == osOK) {
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 4);
+      return RESPOND_SUCCESS;
+    }
+    else {
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_FAILURE, 4);
+      return RESPOND_FAILURE;
+    }
   } else if (temp == CMD_DEBUG_RESET_FW) {
     memset(resp_buf.buf, 0, 4);
     if (Reset_Up_Status() == osOK) {

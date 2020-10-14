@@ -155,7 +155,6 @@ Section Cross References
     main.o(i.main) refers to spi.o(i.MX_SPI1_Init) for MX_SPI1_Init
     main.o(i.main) refers to stm32f4xx_hal_gpio.o(i.HAL_GPIO_ReadPin) for HAL_GPIO_ReadPin
     main.o(i.main) refers to upgrade.o(i.startup_process) for startup_process
-    main.o(i.main) refers to stm32f4xx_hal_uart.o(i.HAL_UART_Receive) for HAL_UART_Receive
     main.o(i.main) refers to menu.o(i.Main_Menu) for Main_Menu
     main.o(i.main) refers to usart.o(.bss) for huart3
     gpio.o(i.MX_GPIO_Init) refers to memseta.o(.text) for __aeabi_memclr4
@@ -1552,13 +1551,13 @@ Image Symbol Table
     i.disableSystick                         0x08003692   Section        0  menu.o(i.disableSystick)
     i.erase_up_status                        0x080036a0   Section        0  upgrade.o(i.erase_up_status)
     i.main                                   0x080036f0   Section        0  main.o(i.main)
-    i.print_up_status                        0x08003758   Section        0  upgrade.o(i.print_up_status)
-    i.startup_process                        0x080037e4   Section        0  upgrade.o(i.startup_process)
-    i.update_config_data                     0x08003a10   Section        0  upgrade.o(i.update_config_data)
-    .constdata                               0x08003af0   Section       16  system_stm32f4xx.o(.constdata)
-    .constdata                               0x08003b00   Section        8  system_stm32f4xx.o(.constdata)
-    .conststring                             0x08003b08   Section      461  menu.o(.conststring)
-    .conststring                             0x08003cd8   Section      249  upgrade.o(.conststring)
+    i.print_up_status                        0x08003740   Section        0  upgrade.o(i.print_up_status)
+    i.startup_process                        0x080037cc   Section        0  upgrade.o(i.startup_process)
+    i.update_config_data                     0x080039f8   Section        0  upgrade.o(i.update_config_data)
+    .constdata                               0x08003ad8   Section       16  system_stm32f4xx.o(.constdata)
+    .constdata                               0x08003ae8   Section        8  system_stm32f4xx.o(.constdata)
+    .conststring                             0x08003af0   Section      461  menu.o(.conststring)
+    .conststring                             0x08003cc0   Section      249  upgrade.o(.conststring)
     .data                                    0x20018000   Section     1024  common.o(.data)
     CRC32_TABLE                              0x20018000   Data        1024  common.o(.data)
     .data                                    0x20018400   Section        8  menu.o(.data)
@@ -1835,14 +1834,14 @@ Image Symbol Table
     boot_process                             0x0800365f   Thumb Code    52  upgrade.o(i.boot_process)
     disableSystick                           0x08003693   Thumb Code    14  menu.o(i.disableSystick)
     erase_up_status                          0x080036a1   Thumb Code    70  upgrade.o(i.erase_up_status)
-    main                                     0x080036f1   Thumb Code    96  main.o(i.main)
-    print_up_status                          0x08003759   Thumb Code    86  upgrade.o(i.print_up_status)
-    startup_process                          0x080037e5   Thumb Code   246  upgrade.o(i.startup_process)
-    update_config_data                       0x08003a11   Thumb Code   108  upgrade.o(i.update_config_data)
-    AHBPrescTable                            0x08003af0   Data          16  system_stm32f4xx.o(.constdata)
-    APBPrescTable                            0x08003b00   Data           8  system_stm32f4xx.o(.constdata)
-    Region$$Table$$Base                      0x08003dd4   Number         0  anon$$obj.o(Region$$Table)
-    Region$$Table$$Limit                     0x08003df4   Number         0  anon$$obj.o(Region$$Table)
+    main                                     0x080036f1   Thumb Code    72  main.o(i.main)
+    print_up_status                          0x08003741   Thumb Code    86  upgrade.o(i.print_up_status)
+    startup_process                          0x080037cd   Thumb Code   246  upgrade.o(i.startup_process)
+    update_config_data                       0x080039f9   Thumb Code   108  upgrade.o(i.update_config_data)
+    AHBPrescTable                            0x08003ad8   Data          16  system_stm32f4xx.o(.constdata)
+    APBPrescTable                            0x08003ae8   Data           8  system_stm32f4xx.o(.constdata)
+    Region$$Table$$Base                      0x08003dbc   Number         0  anon$$obj.o(Region$$Table)
+    Region$$Table$$Limit                     0x08003ddc   Number         0  anon$$obj.o(Region$$Table)
     JumpToApplication                        0x20018400   Data           4  menu.o(.data)
     JumpAddress                              0x20018404   Data           4  menu.o(.data)
     uwTickFreq                               0x20018408   Data           1  stm32f4xx_hal.o(.data)
@@ -1866,9 +1865,9 @@ Memory Map of the image
 
   Image Entry point : 0x080001ad
 
-  Load Region LR_IROM1 (Base: 0x08000000, Size: 0x0000420c, Max: 0x00100000, ABSOLUTE)
+  Load Region LR_IROM1 (Base: 0x08000000, Size: 0x000041f4, Max: 0x00100000, ABSOLUTE)
 
-    Execution Region ER_IROM1 (Exec base: 0x08000000, Load base: 0x08000000, Size: 0x00003df4, Max: 0x00100000, ABSOLUTE)
+    Execution Region ER_IROM1 (Exec base: 0x08000000, Load base: 0x08000000, Size: 0x00003ddc, Max: 0x00100000, ABSOLUTE)
 
     Exec Addr    Load Addr    Size         Type   Attr      Idx    E Section Name        Object
 
@@ -2006,30 +2005,30 @@ Memory Map of the image
     0x0800365e   0x0800365e   0x00000034   Code   RO          405    i.boot_process      upgrade.o
     0x08003692   0x08003692   0x0000000e   Code   RO          283    i.disableSystick    menu.o
     0x080036a0   0x080036a0   0x00000050   Code   RO          406    i.erase_up_status   upgrade.o
-    0x080036f0   0x080036f0   0x00000068   Code   RO          486    i.main              main.o
-    0x08003758   0x08003758   0x0000008c   Code   RO          407    i.print_up_status   upgrade.o
-    0x080037e4   0x080037e4   0x0000022c   Code   RO          408    i.startup_process   upgrade.o
-    0x08003a10   0x08003a10   0x000000e0   Code   RO          409    i.update_config_data  upgrade.o
-    0x08003af0   0x08003af0   0x00000010   Data   RO         3148    .constdata          system_stm32f4xx.o
-    0x08003b00   0x08003b00   0x00000008   Data   RO         3149    .constdata          system_stm32f4xx.o
-    0x08003b08   0x08003b08   0x000001cd   Data   RO          285    .conststring        menu.o
-    0x08003cd5   0x08003cd5   0x00000003   PAD
-    0x08003cd8   0x08003cd8   0x000000f9   Data   RO          410    .conststring        upgrade.o
-    0x08003dd1   0x08003dd1   0x00000003   PAD
-    0x08003dd4   0x08003dd4   0x00000020   Data   RO         3495    Region$$Table       anon$$obj.o
+    0x080036f0   0x080036f0   0x00000050   Code   RO          486    i.main              main.o
+    0x08003740   0x08003740   0x0000008c   Code   RO          407    i.print_up_status   upgrade.o
+    0x080037cc   0x080037cc   0x0000022c   Code   RO          408    i.startup_process   upgrade.o
+    0x080039f8   0x080039f8   0x000000e0   Code   RO          409    i.update_config_data  upgrade.o
+    0x08003ad8   0x08003ad8   0x00000010   Data   RO         3148    .constdata          system_stm32f4xx.o
+    0x08003ae8   0x08003ae8   0x00000008   Data   RO         3149    .constdata          system_stm32f4xx.o
+    0x08003af0   0x08003af0   0x000001cd   Data   RO          285    .conststring        menu.o
+    0x08003cbd   0x08003cbd   0x00000003   PAD
+    0x08003cc0   0x08003cc0   0x000000f9   Data   RO          410    .conststring        upgrade.o
+    0x08003db9   0x08003db9   0x00000003   PAD
+    0x08003dbc   0x08003dbc   0x00000020   Data   RO         3495    Region$$Table       anon$$obj.o
 
 
-    Execution Region RW_IRAM1 (Exec base: 0x20018000, Load base: 0x08003df4, Size: 0x00000dc0, Max: 0x00017c00, ABSOLUTE)
+    Execution Region RW_IRAM1 (Exec base: 0x20018000, Load base: 0x08003ddc, Size: 0x00000dc0, Max: 0x00017c00, ABSOLUTE)
 
     Exec Addr    Load Addr    Size         Type   Attr      Idx    E Section Name        Object
 
-    0x20018000   0x08003df4   0x00000400   Data   RW           25    .data               common.o
-    0x20018400   0x080041f4   0x00000008   Data   RW          287    .data               menu.o
-    0x20018408   0x080041fc   0x0000000c   Data   RW         2221    .data               stm32f4xx_hal.o
-    0x20018414   0x08004208   0x00000004   Data   RW         3150    .data               system_stm32f4xx.o
+    0x20018000   0x08003ddc   0x00000400   Data   RW           25    .data               common.o
+    0x20018400   0x080041dc   0x00000008   Data   RW          287    .data               menu.o
+    0x20018408   0x080041e4   0x0000000c   Data   RW         2221    .data               stm32f4xx_hal.o
+    0x20018414   0x080041f0   0x00000004   Data   RW         3150    .data               system_stm32f4xx.o
     0x20018418        -       0x00000040   Zero   RW          284    .bss                menu.o
     0x20018458        -       0x00000406   Zero   RW          356    .bss                ymodem.o
-    0x2001885e   0x0800420c   0x00000002   PAD
+    0x2001885e   0x080041f4   0x00000002   PAD
     0x20018860        -       0x000000a8   Zero   RW          564    .bss                i2c.o
     0x20018908        -       0x00000058   Zero   RW          611    .bss                spi.o
     0x20018960        -       0x00000040   Zero   RW          653    .bss                usart.o
@@ -2037,7 +2036,7 @@ Memory Map of the image
     0x200189c0        -       0x00000400   Zero   RW            1    STACK               startup_stm32f429xx.o
 
 
-    Execution Region RW_IRAM2 (Exec base: 0x2002fc00, Load base: 0x0800420c, Size: 0x00000000, Max: 0x00000400, ABSOLUTE, UNINIT)
+    Execution Region RW_IRAM2 (Exec base: 0x2002fc00, Load base: 0x080041f4, Size: 0x00000000, Max: 0x00000400, ABSOLUTE, UNINIT)
 
     **** No section assigned to this execution region ****
 
@@ -2053,7 +2052,7 @@ Image component sizes
        262          8          0          0          0       3781   flash_if.o
        216         22          0          0          0       1019   gpio.o
        444         50          0          0        168       2522   i2c.o
-       222         18          0          0          0       2196   main.o
+       198         18          0          0          0       2148   main.o
       2138       1484        461          8         64      11100   menu.o
        204         24          0          0         88       1721   spi.o
         36          8        428          0       1024        848   startup_stm32f429xx.o
@@ -2075,7 +2074,7 @@ Image component sizes
        636         36          0          0       1030       3675   ymodem.o
 
     ----------------------------------------------------------------------
-     13586       2596       1200       1048       2472     881681   Object Totals
+     13562       2596       1200       1048       2472     881633   Object Totals
          0          0         32          0          0          0   (incl. Generated)
         10          0          6          0          2          0   (incl. Padding)
 
@@ -2120,15 +2119,15 @@ Image component sizes
 
       Code (inc. data)   RO Data    RW Data    ZI Data      Debug   
 
-     14660       2664       1200       1048       2472     872097   Grand Totals
-     14660       2664       1200       1048       2472     872097   ELF Image Totals
-     14660       2664       1200       1048          0          0   ROM Totals
+     14636       2664       1200       1048       2472     872049   Grand Totals
+     14636       2664       1200       1048       2472     872049   ELF Image Totals
+     14636       2664       1200       1048          0          0   ROM Totals
 
 ==============================================================================
 
-    Total RO  Size (Code + RO Data)                15860 (  15.49kB)
+    Total RO  Size (Code + RO Data)                15836 (  15.46kB)
     Total RW  Size (RW Data + ZI Data)              3520 (   3.44kB)
-    Total ROM Size (Code + RO Data + RW Data)      16908 (  16.51kB)
+    Total ROM Size (Code + RO Data + RW Data)      16884 (  16.49kB)
 
 ==============================================================================
 

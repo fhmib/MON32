@@ -77,7 +77,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   //int i = 0;
-  uint8_t ch;
+//  uint8_t ch;
 #if defined(USE_SRAM_FOR_FW_IMG) || defined(USE_FLASH_FOR_FW_IMG)
   uint8_t start;
 #endif
@@ -122,18 +122,14 @@ int main(void)
     }
   }
   startup_process();
-#if 0
-  boot_state = HAL_GPIO_ReadPin(BOOT_GPIO_Port, BOOT_Pin);
-  if (boot_state == GPIO_PIN_RESET) {
-    startup_process();
-  }
-#endif
   CLEAR_BIT(huart3.Instance->SR, USART_SR_RXNE);
   __HAL_UART_FLUSH_DRREGISTER(&huart3);
   //HAL_TIM_Base_Start_IT(&htim3);
+#if 0
   if (HAL_UART_Receive(&huart3, &ch, 1, 5 * 1000) == HAL_TIMEOUT) {
     startup_process();
   }
+#endif
   Main_Menu();
   
   /* USER CODE END 2 */

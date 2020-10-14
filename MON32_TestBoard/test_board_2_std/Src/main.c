@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "MON32_testboard_1.0.1"
+#define VER "MON32_testboard_1.0.2"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 
@@ -69,6 +69,7 @@ uint8_t terminal_buf[256];
 uint8_t communication_buf[TRANS_MAX_LENGTH];
 uint32_t tim_counter = 0;
 uint32_t tim_counter_max = 1;
+uint32_t tim2_counter = 0;
 
 extern usart_tr_stu *usart1_tr;
 uint8_t uart1_data;
@@ -250,6 +251,7 @@ console_cmd cmdlist[] = {
   {"pd2", cmd_rx_pd_cali, "Get RX PD calibration data", "pd2", "pd2"},
   {"pd1", cmd_tap_pd_cali, "Get TAP PD calibration data", "pd1", "pd1"},
   {"voltage", cmd_voltage, "Get device voltage", "voltage get", "voltage get"},
+  {"loopback", cmd_loopback, "Command about loopback check", "loopback check | status", "loopback check | status"},
   {"alarm", cmd_alarm, "Get alarm", "alarm", "alarm"},
   {"modulation", cmd_modulation, "Command about tosa", "modulation on | off | mode", "modulation on | off | mode"},
   {"status", cmd_device_status, "Get device status", "status", "status"},
@@ -259,6 +261,7 @@ console_cmd cmdlist[] = {
   {"date", cmd_time, "Set/Get module time", "date get | set y m d h m s", "date get | set 2020 7 29 15 55 50"},
   {"performance", cmd_performance, "Get performance", "performance [id1] [id2] ... | all", "performance 1 5 | performance all"},
   {"threshold", cmd_threshold, "Set/Get threshold", "threshold get <id> | set <id> <low> <high>", "threshold get 0 | set 0 -100 800"},
+  {"log", cmd_log, "Command about log", "log size <type> | get <type> <offset> <length>", "log size 1 | get 1 0x100 128"},
   {"debug", cmd_for_debug, "Command for debug", "debug", "debug"},
   {"help", cmd_help, "Help information", "help | <cmd> help", "help | upgrade help"},
 };
@@ -283,6 +286,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       HAL_GPIO_TogglePin(PRO_CTL_GPIO_Port, PRO_CTL_Pin);
       tim_counter = 0;
     }
+  } else if (htim->Instance == TIM2) {
+    tim2_counter++;
   }
 }
 #if 0

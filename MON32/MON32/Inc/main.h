@@ -64,6 +64,14 @@ extern double tosa_power_high_max_thr;
 extern double tosa_power_low_min_thr;
 
 extern uint8_t device_busy;
+
+extern const uint32_t error_file_flash_addr[];
+extern const uint32_t error_file_flash_end;
+extern const uint8_t error_file_flash_count;
+extern const uint32_t normal_file_flash_addr[];
+extern const uint32_t normal_file_flash_end;
+extern const uint8_t normal_file_flash_count;
+extern LogFileState log_file_state;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -72,7 +80,9 @@ extern uint8_t device_busy;
 #define WATCHDOG_PRIORITY         osPriorityISR
 #define INTERRUPT_TASK_PRIORITY   osPriorityISR
 #define CMD_PROCESS_PRIORITY      osPriorityHigh
+#define LOG_MESSAGE_PRIORITY      osPriorityLow
 #define MONITOR_PRIORITY          osPriorityAboveNormal
+#define LAZER_MANAGER_PRIORITY    osPriorityHigh
 
 #define WATCH_DOG_DELAY_TIME      500 // ms
 
@@ -90,10 +100,17 @@ extern uint8_t device_busy;
 #define EEPROM_ADDR               (0x50 << 1)
 #define ADC7828_ADDR              (0x48 << 1)
 
+#define LOG_QUEUE_LENGTH          6
+#define ERROR_LOG_FIRST_SECTOR          12
+#define NORMAL_LOG_FIRST_SECTOR          19
+
 #define ISR_QUEUE_LENGTH          6
+
+#define LM_QUEUE_LENGTH           6
 
 #define RUN_MAGIC                 0xA5A55A5A
 #define UPGRADE_MAGIC             0xA5A55A5A
+#define LOG_MAGIC                 0xA5A55A5A
 #define ALARM_MAGIC               0xA5A55A5A
 /* USER CODE END EM */
 

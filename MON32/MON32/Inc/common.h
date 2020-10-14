@@ -30,7 +30,9 @@
 #define PRINT(format, ...)	do{\
                     } while(0)
 #endif
-#define THROW_LOG(format, ...) do {\
+#define THROW_LOG(type, format, ...) do {\
+                      sprintf((char*)debug_buf, format, ##__VA_ARGS__);\
+                      Throw_Log(type, debug_buf, strlen((char*)debug_buf));\
                     } while(0)
 
 extern uint8_t debug_buf[];

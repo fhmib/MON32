@@ -57,6 +57,8 @@ typedef enum {
   CMD_RX_PD_CALI          = 0x1C,
   CMD_TAP_PD_CALI         = 0x1D,
   CMD_QUERY_VOLTAGE       = 0x1F,
+  CMD_LOOPBACK_TEST       = 0x20,
+  CMD_LOOPBACK_RESULT     = 0x21,
   CMD_QUERY_ALARM         = 0x22,
   CMD_SET_MODULATION      = 0x25,
   CMD_QUERY_MODULATION    = 0x26,
@@ -73,6 +75,8 @@ typedef enum {
   CMD_QUERY_PERFORMANCE   = 0x87,
   CMD_SET_THRESHOLD       = 0x88,
   CMD_QUERY_THRESHOLD     = 0x89,
+  CMD_QUERY_LOG_SIZE      = 0x8A,
+  CMD_GET_LOG_CONTENT     = 0x8B,
 
   // for test
   CMD_FOR_DEBUG           = 0x7FFF,
@@ -87,6 +91,8 @@ typedef enum {
   CMD_DEBUG_CAL_SW        = 0x06,
   CMD_DEBUG_CAL_IL        = 0x07,
   CMD_DEBUG_DUMP          = 0x09,
+  CMD_DEBUG_EEPROM        = 0x0A,
+  CMD_DEBUG_RESET_LOG     = 0x0B,
   CMD_DEBUG_RESET_FW      = 0x0D,
   CMD_DEBUG_TEST_TOSA     = 0x0E,
   CMD_DEBUG_SET_TOSA      = 0x0F,
@@ -184,6 +190,8 @@ uint8_t Cmd_Query_Tosa(void);
 uint8_t Cmd_RX_PD_CALI(void);
 uint8_t Cmd_TAP_PD_CALI(void);
 uint8_t Cmd_Voltage(void);
+uint8_t Cmd_Loopback_Test(void);
+uint8_t Cmd_Loopback_Result(void);
 uint8_t Cmd_Query_Alarm(void);
 uint8_t Cmd_Set_Modulation(void);
 uint8_t Cmd_Query_Modulation(void);
@@ -198,82 +206,8 @@ uint8_t Cmd_Get_Time(void);
 uint8_t Cmd_Performance(void);
 uint8_t Cmd_Set_Threshold(void);
 uint8_t Cmd_Query_Threshold(void);
+uint8_t Cmd_LOG_Size(void);
+uint8_t Cmd_LOG_Content(void);
 uint8_t Cmd_For_Debug(void);
 
-
-
-#if 0
-extern char *fw_version;
-
-#define TAG_MAX_SPACE               0x20
-
-typedef enum {
-  CMD_DEBUG_SW_DAC        = 0x01,
-  CMD_DEBUG_SW_ADC        = 0x02,
-  CMD_DEBUG_VOL_ADC       = 0x03,
-  CMD_DEBUG_TAG           = 0x04,
-  CMD_DEBUG_PIN           = 0x05,
-  CMD_DEBUG_CAL_SW        = 0x06,
-  CMD_DEBUG_CAL_IL        = 0x07,
-  CMD_DEBUG_CAL_THR       = 0x08,
-  CMD_DEBUG_DUMP          = 0x09,
-  CMD_DEBUG_EEPROM        = 0x0A,
-  CMD_DEBUG_RESET_LOG     = 0x0B,
-} CmdDebugId;
-
-
-
-#define UPGRADE_MAX_DATA_LENGTH     1024
-#define UPGRADE_MIN_DATA_LENGTH     256
-
-typedef enum {
-  FW_HEAD_MODULE_NAME    = 0x00,
-  FW_HEAD_FW_LENGTH      = 0xC0,
-  FW_HEAD_CRC            = 0xC4,
-  FW_HEAD_END            = 0xFF,
-  FW_HEAD_HEADER_LENGTH,
-} FwFileHeader;
-
-typedef struct {
-  uint8_t run;
-  uint8_t is_erasing;
-  
-  uint32_t upgrade_addr;
-  uint32_t upgrade_sector;
-  
-  uint8_t pre_state;
-  uint32_t pre_seq;
-  
-  uint32_t crc32;
-  uint32_t fw_size;
-  uint32_t block_size;
-  uint32_t recvd_length;
-} UpgradeStruct;
-
-typedef enum {
-  RUN_MODE_APPLICATION = 0x0,
-  RUN_MODE_UPGRADE = 0x1,
-} RunMode;
-
-typedef enum {
-  UPGRADE_UNUSABLE       = 0x00,
-  UPGRADE_RESET          = 0x01,
-  UPGRADE_FAILURE        = 0x02,
-  UPGRADE_SUCCESS        = 0x03,
-} UpgradeState;
-
-
-uint32_t Cmd_Device_Status(void);
-uint32_t Cmd_Voltage(void);
-uint32_t Cmd_Voltage_Threshold(void);
-uint32_t Cmd_Set_Time(void);
-uint32_t Cmd_Get_Time(void);
-uint32_t Cmd_LOG_Number(void);
-uint32_t Cmd_LOG_Content(void);
-uint32_t Cmd_Get_IL(void);
-uint32_t Cmd_Set_Switch(void);
-uint32_t Cmd_Get_Switch(void);
-uint32_t Cmd_Maintain(void);
-uint32_t Cmd_For_Debug(void);
-#endif
 #endif

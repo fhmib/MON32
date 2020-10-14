@@ -10,11 +10,30 @@ typedef struct {
 } MsgStruct;
 
 typedef enum {
-  MSG_TYPE_LOG,
+  MSG_TYPE_ERROR_LOG,
+  MSG_TYPE_NORMAL_LOG,
   MSG_TYPE_FLASH_ISR,
   MSG_TYPE_SWITCH1_ISR,
   MSG_TYPE_SWITCH2_ISR,
+  MSG_TYPE_SELF_CHECK_SWITCH,
+  MSG_TYPE_LAZER_ENABLE,
+  MSG_TYPE_LAZER_DISABLE,
+  MSG_TYPE_LAZER_POWER,
+  MSG_TYPE_SELF_TEST,
+  MSG_TYPE_SELF_TEST_STEP_2,
 } MsgType;
+
+// For Log File
+typedef struct {
+  uint32_t magic;
+  uint32_t magic_2;
+  uint32_t error_header;
+  uint32_t error_offset;
+  uint8_t error_cur_sector;
+  uint32_t normal_header;
+  uint32_t normal_offset;
+  uint8_t normal_cur_sector;
+} LogFileState;
 
 typedef struct {
   uint32_t magic;
@@ -27,14 +46,6 @@ typedef struct {
 } UpgradeFlashState;
 
 typedef enum {
-#if 0
-  // threshold
-  EE_VOLTAGE_2_5_THR      = 0x1460,
-  EE_VOLTAGE_3_3_THR      = 0x1468,
-  EE_VOLTAGE_5_0_THR      = 0x1470,
-  EE_VOLTAGE_64_0_THR     = 0x1478,
-  EE_TEMPERATURE_THR      = 0x1480,
-#endif
   // tag
   EE_TAG_SN               = 0x0000,
   EE_TAG_DATE             = 0x0010,
@@ -55,6 +66,8 @@ typedef enum {
   EE_CAL_RX_IL            = 0x1450,
   EE_CAL_LB_IL            = 0x14D0,
   EE_CAL_RX_PD            = 0x1500,
+  // Parameter Table end Address
+  EE_PARA_TABLE_END       = 0x156F,
   // Alarm
   EE_ALARM_HISTORY        = 0x1570,
   // upgrade
@@ -67,8 +80,11 @@ typedef enum {
   EE_UP_FACTORY_CRC32     = 0x3012, // 0x3012 ~ 0x3015
   // log
   EE_LOG_MAGIC            = 0x3020, // 0x3020 ~ 0x3023
-  EE_LOG_OFFSET           = 0x3024, // 0x3024 ~ 0x3027
-  EE_LOG_HEADER           = 0x3028, // 0x3028 ~ 0x302B
+  EE_ERROR_LOG_OFFSET     = 0x3024, // 0x3024 ~ 0x3027
+  EE_ERROR_LOG_HEADER     = 0x3028, // 0x3028 ~ 0x302B
+  EE_NORMAL_LOG_OFFSET    = 0x302C, // 0x302C ~ 0x302F
+  EE_NORMAL_LOG_HEADER    = 0x3030, // 0x3030 ~ 0x3033
+  EE_LOG_MAGIC_2          = 0x303C, // 0x303C ~ 0x303F
   // Alarm
   EE_ALARM_MAGIC          = 0x3040,
   EE_ALARM_START          = 0x3044,
@@ -130,11 +146,18 @@ typedef enum {
 } TecAdcChannel;
 
 typedef enum {
+  DAC128S085_TEC_VALUE_CHANNEL = 0,
+  DAC128S085_TEC_SWITCH_CHANNEL = 1,
+  DAC128S085_TOSA_SWITCH_CHANNEL = 2,
+} DAC128S085Channel;
+
+typedef enum {
   EXP_TEMPERATURE         =    1,
   EXP_VOLTAGE_61_0        =    4,
   EXP_VOLTAGE_4_4         =    5,
   EXP_VOLTAGE_3_3         =    6,
   EXP_VOLTAGE_5_0         =    7,
+  EXP_LAZER_POWER         =    8,
   EXP_DAC                 =   13,
   EXP_ADC_2               =   14,
   EXP_ADC_1               =   15,
@@ -154,6 +177,10 @@ typedef enum {
   INT_EXP_OS_ERR          =  5,
   INT_EXP_TMPGD           =  6,
   INT_EXP_UP_ALARM        =  7,
+  INT_EXP_LOG_TASK        =  8,
+  INT_EXP_TAP_PD          =  9,
+  INT_EXP_RX_PD           = 10,
+  INT_EXP_TOSA            = 11,
   INT_EXP_CONST           = 31,
 } InternalExptoinValue;
 
@@ -202,6 +229,12 @@ typedef struct {
   double tec_vol_low_clear;
 } ThresholdStruct;
 
+typedef enum {
+  OSC_SUCCESS = 0,
+  OSC_FAILURE = 1,
+  OSC_ONGOING = 2,
+} OpticalSelfCheckStatus;
+
 typedef struct {
   uint32_t maigc;
   uint8_t uart_reset; // Indicate if reset by uart communication
@@ -209,11 +242,15 @@ typedef struct {
   uint8_t rx_switch_channel; // 0-31: 1 to 1-32   32: 1 to 33   0xFF: none
   uint8_t tx_block;
   uint8_t tosa_enable;
+  uint8_t lazer_ready;
+  uint8_t osc_status; // Optical path self-check status 0:OK 1:FAIL 2:ongoing
   uint8_t modulation;
   uint32_t exp; // exception
   uint32_t internal_exp;
   TosaCalData tosa_low;
   TosaCalData tosa_high;
+  double tosa_dst_power_low;
+  double tosa_dst_power_high;
   ThresholdStruct thr_table;
 } RunTimeStatus;
 
@@ -223,6 +260,14 @@ typedef struct {
   uint8_t start;
   uint8_t end;
 } AlarmHistoryState;
+
+void Throw_Log(uint8_t type, uint8_t *buf, uint32_t length);
+uint32_t Log_Write(uint32_t addr, uint8_t *pbuf, uint32_t length);
+uint32_t Log_Write_byte(uint32_t addr, uint8_t ch, uint32_t length);
+uint32_t Log_Read(uint32_t addr, uint8_t *pbuf, uint32_t length);
+osStatus_t Get_Log_Status(LogFileState *log_status);
+osStatus_t Update_Log_Status(LogFileState *log_status);
+osStatus_t Reset_Log_Status(void);
 
 
 osStatus_t Get_Up_Status(UpgradeFlashState *status);
@@ -247,6 +292,8 @@ void Reset_Switch_Only(uint8_t switch_channel);
 
 void Set_Alarm(void);
 void Clear_Alarm(void);
+void Set_Lazer_Ready(void);
+void Clear_Lazer_Ready(void);
 void Init_Run_Status(void);
 void Set_Switch_Ready(uint8_t switch_channel);
 void Clear_Switch_Ready(uint8_t switch_channel);
@@ -262,6 +309,8 @@ uint8_t Disable_Tosa(void);
 void update_tosa_table(void);
 TosaCalData Get_Tosa_Data(double power);
 TosaCalData Cal_Tosa_Data(TosaCalData x1, TosaCalData x2, double power);
+uint8_t Get_Tap_Power(double *cur_power);
+uint8_t Get_Rx_Power(double *cur_power);
 
 uint8_t cal_tap_pd_by_power(uint16_t *adc, double power);
 uint8_t get_tap_pd_power(uint16_t *adc, double *power);
@@ -283,6 +332,7 @@ uint8_t debug_get_tosa_val(int32_t val, uint32_t *resp_len);
 uint8_t debug_cal_il(uint8_t num, int32_t val);
 uint8_t debug_cal_rx_pd(uint8_t num, uint32_t adc, int32_t val);
 uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len);
+uint8_t debug_eeprom(uint32_t addr, uint32_t *len);
 uint8_t debug_test_tosa(void);
 uint8_t debug_set_tosa(uint16_t low, uint16_t high);
 uint8_t debug_set_tec(uint16_t value);

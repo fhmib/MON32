@@ -65,6 +65,17 @@ double tosa_power_low_min_thr = 0;
 
 uint8_t device_busy = 0;
 
+const uint32_t error_file_flash_addr[] =  {  0x08100000, 0x08104000, 0x08108000, 0x0810C000, 0x08110000, 0x08120000,\
+                                       0x08140000  };
+const uint32_t error_file_flash_end = 0x0815FFFF;
+const uint8_t error_file_flash_count = sizeof(error_file_flash_addr) / sizeof (error_file_flash_addr[0]);
+                                       
+const uint32_t normal_file_flash_addr[] =  {  0x08160000, 0x08180000, 0x081A0000};
+const uint32_t normal_file_flash_end = 0x081BFFFF;
+const uint8_t normal_file_flash_count = sizeof(normal_file_flash_addr) / sizeof (normal_file_flash_addr[0]);
+
+LogFileState log_file_state;
+
 RunTimeStatus run_status __attribute__((at(0x2002FC00)));
 /* USER CODE END PV */
 
@@ -223,6 +234,7 @@ void SystemClock_Config(void)
 void MON32_Init(void)
 {
   osStatus_t status;
+  uint32_t i;
 
   EPT("Firmware version: %s\n", fw_version);
 
@@ -278,14 +290,14 @@ void MON32_Init(void)
       if (run_status.uart_reset) {
         run_status.uart_reset = 0;
         EPT("Startup with UART Reset\n");
-        THROW_LOG("Startup with SOFT Reset\n");
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Startup with SOFT Reset\n");
       } else {
         if (IS_RESETFLAG_SET(IWDG_RESET_BIT)) {
           EPT("Startup with WATCHDOG Reset\n");
-          THROW_LOG("Startup with WATCHDOG Reset\n");
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Startup with WATCHDOG Reset\n");
         } else {
           EPT("Startup with HARD Reset\n");
-          THROW_LOG("Startup with HARD Reset\n");
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Startup with HARD Reset\n");
         }
       }
 
@@ -305,7 +317,7 @@ void MON32_Init(void)
             HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_RESET);
           } else {
             EPT("Detect 2x32 optical switch channel incorrect while initializing\n");
-            THROW_LOG("Detect 2x32 optical switch channel %u incorrect while initializing\n", run_status.tx_switch_channel);
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Detect 2x32 optical switch channel %u incorrect while initializing\n", run_status.tx_switch_channel);
             Reset_Switch_Only(TX_SWITCH_CHANNEL);
             HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
           }
@@ -320,7 +332,7 @@ void MON32_Init(void)
           HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_RESET);
         } else {
           EPT("Detect 1x32 optical switch channel incorrect while initializing\n");
-          THROW_LOG("Detect 1x32 optical switch channel %u incorrect while initializing\n", run_status.rx_switch_channel);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Detect 1x32 optical switch channel %u incorrect while initializing\n", run_status.rx_switch_channel);
           Reset_Switch_Only(RX_SWITCH_CHANNEL);
           HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
         }
@@ -334,6 +346,13 @@ void MON32_Init(void)
         HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
       }
       
+      // Lazer
+      if (run_status.lazer_ready) {
+        HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_RESET);
+      } else {
+        HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_SET);
+      }
+      
       HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_SET);
       osDelay(pdMS_TO_TICKS(1));
       HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
@@ -342,7 +361,7 @@ void MON32_Init(void)
       Reset_Switch_Only(TX_SWITCH_CHANNEL);
       MON32_Init_Dev();
       EPT("Variable run_status exception\n");
-      THROW_LOG("Variable run_status exception\n");
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "Variable run_status exception\n");
     }
   } else if (IS_RESETFLAG_SET(BOR_RESET_BIT) || IS_RESETFLAG_SET(POR_RESET_BIT)) {
     // Init device
@@ -356,7 +375,7 @@ void MON32_Init(void)
     Disable_Tosa();
     MON32_Init_Dev();
     EPT("Startup with MASTER Reset\n");
-    THROW_LOG("Startup with MASTER Reset\n");
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Startup with MASTER Reset\n");
   }
 
   up_state.run = RUN_MODE_APPLICATION;
@@ -367,14 +386,14 @@ void MON32_Init(void)
   status = Get_Up_Status(&upgrade_status);
   if (status) {
     EPT("Get upgrade status failed, status = %d\n", status);
-    THROW_LOG("Get upgrade status failed, status = %d\n", status);
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Get upgrade status failed, status = %d\n", status);
   }
   EPT("upgrade_status: %#X, %u, %u, %u, %#X, %u, %#X\n", upgrade_status.magic, upgrade_status.run, upgrade_status.flash_empty, upgrade_status.length, upgrade_status.crc32,\
                 upgrade_status.factory_length, upgrade_status.factory_crc32);
 
   if (upgrade_status.magic != UPGRADE_MAGIC) {
     EPT("Verify upgrade magic failed\n");
-    THROW_LOG("Verify upgrade magic failed\n");
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Verify upgrade magic failed\n");
   }
   switch (upgrade_status.run) {
     case 0:
@@ -394,7 +413,7 @@ void MON32_Init(void)
       break;
     default:
       EPT("f_state.run invalid\n");
-      THROW_LOG("f_state.run invalid\n");
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "f_state.run invalid\n");
       up_state.upgrade_addr = RESERVE_ADDRESS;
       up_state.upgrade_sector = RESERVE_SECTOR;
       break;
@@ -412,6 +431,24 @@ void MON32_Init(void)
     EPT("flash is empty\n");
   }
   
+  // log
+  Get_Log_Status(&log_file_state);
+  EPT("log_file_state: %#X, %#X\n", log_file_state.offset, log_file_state.header);
+  for (i = 0; i < error_file_flash_count - 1; ++i) {
+    if (log_file_state.error_offset < error_file_flash_addr[i + 1]) {
+      break;
+    }
+  }
+  log_file_state.error_cur_sector = ERROR_LOG_FIRST_SECTOR + i;
+
+  for (i = 0; i < normal_file_flash_count - 1; ++i) {
+    if (log_file_state.normal_offset < normal_file_flash_addr[i + 1]) {
+      break;
+    }
+  }
+  log_file_state.normal_cur_sector = NORMAL_LOG_FIRST_SECTOR + i;
+
+  
   // alarm
   if ((status = Get_EEPROM_Alarm_Status(&history_alarm_status)) != osOK) {
     Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
@@ -426,27 +463,21 @@ void MON32_Init_Dev(void)
   HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(ALARM_GPIO_Port, ALARM_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_SET);
   osDelay(pdMS_TO_TICKS(1));
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
   Init_Run_Status();
   Get_Threshold_Table(&run_status.thr_table);
 
-  run_status.tosa_high = Get_Tosa_Data(0);
-  run_status.tosa_low = Get_Tosa_Data(-4);
+  run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+  run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
   if (run_status.tosa_high.tosa_dac) {
-    status = RTOS_DAC128S085_Write(0, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
+    status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
     if (status != osOK) {
       Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
     }
     DAC5541_Write(run_status.tosa_high.tosa_dac);
-
-    if (HAL_GPIO_ReadPin(PRO_DIS_N_GPIO_Port, PRO_DIS_N_Pin) == GPIO_PIN_RESET) {
-      if (Enable_Tosa()) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-      }
-      run_status.tosa_enable = 1;
-    }
   }
 
   if (Set_Switch(RX_PD_CHANNEL, 0)) {
@@ -464,7 +495,7 @@ void MON32_Init_Dev(void)
 
 extern FLASH_ProcessTypeDef pFlash;
 extern osMessageQueueId_t mid_ISR;
-//extern osSemaphoreId_t logEraseSemaphore;
+extern osSemaphoreId_t logEraseSemaphore;
 void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 {
   MsgStruct isr_msg;
@@ -474,7 +505,7 @@ void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
     flash_in_use = 0;
     if (up_state.is_erasing == 0) {
       // send signal to logTask
-      //osSemaphoreRelease(logEraseSemaphore);
+      osSemaphoreRelease(logEraseSemaphore);
     } else {
       upgrade_status.flash_empty = 1;
       up_state.is_erasing = 0;
@@ -506,7 +537,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     } else {
       if (run_status.tx_block) {
         EPT("Switch is blocked\n");
-        THROW_LOG("Switch is blocked\n\n");
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Detected 2x32 switch strobe signal but it is blocked\n");
       } else {
         isr_msg.type = MSG_TYPE_SWITCH1_ISR;
         osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);

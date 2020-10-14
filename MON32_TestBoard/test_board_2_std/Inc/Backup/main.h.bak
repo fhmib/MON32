@@ -116,6 +116,8 @@ uint32_t send_cmd(uint8_t ch, char *arg);
 #define SPI1_CS_GPIO_Port GPIOA
 #define SW1_D1_Pin GPIO_PIN_7
 #define SW1_D1_GPIO_Port GPIOH
+#define PRO_DIS_N_Pin GPIO_PIN_8
+#define PRO_DIS_N_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
