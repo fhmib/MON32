@@ -47,11 +47,17 @@ void startup_process()
   if (f_state.magic != UPGRADE_MAGIC) {
     sprintf((char*)buf, "Firmware state is uninitialized, boot from factory\n");
     Serial_PutString(buf);
-    update_config_data(FACTORY_ADDRESS, 0x10000);
+    if (*(uint32_t*)(FACTORY_ADDRESS) == 0xFFFFFFFF)
+      return;
+    update_config_data(FACTORY_ADDRESS, 0x18000);
     if (Get_Up_Status(&f_state) != HAL_OK) {
       sprintf((char*)buf, "Get upgrade status failed 2\n");
       Serial_PutString(buf);
       return;
+    }
+  } else {
+    if (*(uint32_t*)(FACTORY_ADDRESS) == 0xFFFFFFFF) {
+      erase_up_status();
     }
   }
 #ifdef PRINT_DEBUG_MESSAGE

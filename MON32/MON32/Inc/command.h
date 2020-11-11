@@ -105,6 +105,8 @@ typedef enum {
   CMD_DEBUG_SET_LP        = 0x16,
   CMD_DEBUG_GET_SW_CHAN   = 0x17,
   CMD_DEBUG_RESET_ALARM   = 0x18,
+  CMD_DEBUG_SET_SW_ADC    = 0x19,
+  CMD_DEBUG_CHECK_CALI    = 0x33,
   CMD_DEBUG_INTER_EXP     = 0xFF,
 } CmdDebugId;
 

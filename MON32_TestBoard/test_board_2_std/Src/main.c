@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "MON32_testboard_1.0.2"
+#define VER "MON32_testboard_1.0.4"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 
@@ -65,7 +65,7 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t terminal_buf[256];
+uint8_t terminal_buf[2048];
 uint8_t communication_buf[TRANS_MAX_LENGTH];
 uint32_t tim_counter = 0;
 uint32_t tim_counter_max = 1;

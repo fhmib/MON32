@@ -175,7 +175,7 @@ void Main_Menu(void)
   Serial_PutString((uint8_t *)"\r\n======================================================================");
   Serial_PutString((uint8_t *)"\r\n=              (C) COPYRIGHT 2020 O-Net Technologies                 =");
   Serial_PutString((uint8_t *)"\r\n=                                                                    =");
-  Serial_PutString((uint8_t *)"\r\n=    1x64 Optical Switch Programming Application  (Version 1.0.0)    =");
+  Serial_PutString((uint8_t *)"\r\n=    1x64 Optical Switch Programming Application  (Version 1.0.1)    =");
   Serial_PutString((uint8_t *)"\r\n=                                                                    =");
   Serial_PutString((uint8_t *)"\r\n=                                                By Beijing R&D      =");
   Serial_PutString((uint8_t *)"\r\n======================================================================");

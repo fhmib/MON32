@@ -57,6 +57,7 @@ osSemaphoreId_t logEraseSemaphore;                  // semaphore id
 osMessageQueueId_t mid_LogMsg;
 osMessageQueueId_t mid_ISR;                // message queue id
 osMessageQueueId_t mid_LazerManager;                // message queue id
+osMessageQueueId_t mid_CmdProcess;                // message queue id
 
 osMutexId_t i2c1Mutex;
 osMutexId_t i2c2Mutex;
@@ -192,6 +193,11 @@ void MX_FREERTOS_Init(void) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
   }
 
+  mid_CmdProcess = osMessageQueueNew(LM_QUEUE_LENGTH, sizeof(MsgStruct), NULL);
+  if (mid_CmdProcess == NULL) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
+  }
+
   i2c1Mutex = osMutexNew(&Thread_Mutex_attr);
   if (i2c1Mutex == NULL) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
@@ -297,6 +303,8 @@ void uartProcessTask(void *argument)
   uart_sync.ProcessTimeout = 0;
   uart_sync.ProcessOnGoing = 0;
   trans_buf.stage = TRANS_WAIT_START;
+  
+  device_busy = 0;
 
   for(;;)
   {
@@ -469,9 +477,7 @@ void isrTask(void *argument)
       Clear_Switch_Ready(switch_channel);
       if (Set_Switch(switch_channel, switch_pos)) {
         run_status.tx_switch_channel = 0xFF;
-        if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-          Set_Flag(&run_status.exp, EXP_SWITCH);
-        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Set Switch failed in io mode\n");
         continue;
       }
 
@@ -481,9 +487,7 @@ void isrTask(void *argument)
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
         Reset_Switch(switch_channel);
-        if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-          Set_Flag(&run_status.exp, EXP_SWITCH);
-        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         continue;
       }
 
@@ -501,9 +505,7 @@ void isrTask(void *argument)
       Clear_Switch_Ready(switch_channel);
       if (Set_Switch(switch_channel, switch_pos)) {
         run_status.rx_switch_channel = 0xFF;
-        if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-          Set_Flag(&run_status.exp, EXP_SWITCH);
-        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Set Switch failed in io mode\n");
         continue;
       }
 
@@ -513,9 +515,7 @@ void isrTask(void *argument)
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
         Reset_Switch(switch_channel);
-        if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-          Set_Flag(&run_status.exp, EXP_SWITCH);
-        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         continue;
       }
 
@@ -528,9 +528,6 @@ void isrTask(void *argument)
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
         run_status.tx_switch_channel = 64;
@@ -538,9 +535,6 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 64) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
 
@@ -549,9 +543,6 @@ void isrTask(void *argument)
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
         run_status.rx_switch_channel = 32;
@@ -559,34 +550,22 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 32) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
 
         msg.type = MSG_TYPE_SELF_TEST_STEP_2;
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       } else if (run_status.osc_status == OSC_SUCCESS) {
-        // Switch Loopback
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (Set_Switch(TX_SWITCH_CHANNEL, 0)) {
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
-          run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
         run_status.tx_switch_channel = 0;
         // Check
         if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 0) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
-          run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
         Set_Switch_Ready(TX_SWITCH_CHANNEL);
@@ -595,20 +574,26 @@ void isrTask(void *argument)
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
-          run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
           continue;
         }
         run_status.rx_switch_channel = 0;
         // Check
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
-          run_status.osc_status = OSC_FAILURE;
-          if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-            Set_Flag(&run_status.exp, EXP_SWITCH);
-          }
+          continue;
+        }
+        Set_Switch_Ready(RX_SWITCH_CHANNEL);
+      } else if (run_status.osc_status == OSC_FAILURE) {
+        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
+        if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
+          run_status.rx_switch_channel = 0xFF;
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
+          continue;
+        }
+        run_status.rx_switch_channel = 0;
+        // Check
+        if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
           continue;
         }
         Set_Switch_Ready(RX_SWITCH_CHANNEL);
@@ -780,6 +765,7 @@ void monitorTask(void *argument)
 {
   osStatus_t status;
   uint16_t value;
+  uint8_t ret;
   double voltage, temp;
   uint8_t pre_alarm;
   uint32_t pre_exp_value;
@@ -820,7 +806,7 @@ void monitorTask(void *argument)
 
     // PRO_Dis signal
     if (HAL_GPIO_ReadPin(PRO_DIS_N_GPIO_Port, PRO_DIS_N_Pin) == GPIO_PIN_RESET) {
-      if (!run_status.tosa_enable) {
+      if (!run_status.tosa_enable && allow_tosa) {
         msg.type = MSG_TYPE_LAZER_ENABLE;
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       }
@@ -837,16 +823,16 @@ void monitorTask(void *argument)
       Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
     } else {
       voltage = (double)value / 4096 * 2.5 * 2;
-    }
-    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_3_3)) {
-      if (voltage > run_status.thr_table.vol_3_3_high_alarm || voltage < run_status.thr_table.vol_3_3_low_alarm) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 3.3V abnormal, current voltage = %.3lfV\n", voltage);
-        Set_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
-      }
-    } else {
-      if (voltage <= run_status.thr_table.vol_3_3_high_clear && voltage >= run_status.thr_table.vol_3_3_low_clear) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 3.3V back to normal\n");
-        Clear_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
+      if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_3_3)) {
+        if (voltage > run_status.thr_table.vol_3_3_high_alarm || voltage < run_status.thr_table.vol_3_3_low_alarm) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 3.3V abnormal, current voltage = %.3lfV\n", voltage);
+          Set_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.vol_3_3_high_clear && voltage >= run_status.thr_table.vol_3_3_low_clear) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 3.3V back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_VOLTAGE_3_3);
+        }
       }
     }
 
@@ -855,16 +841,16 @@ void monitorTask(void *argument)
       Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
     } else {
       voltage = (double)value / 4096 * 2.5 * 3;
-    }
-    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_4_4)) {
-      if (voltage > run_status.thr_table.vol_4_4_high_alarm || voltage < run_status.thr_table.vol_4_4_low_alarm) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 4.4V abnormal, current voltage = %.3lfV\n", voltage);
-        Set_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
-      }
-    } else {
-      if (voltage <= run_status.thr_table.vol_4_4_high_clear && voltage >= run_status.thr_table.vol_4_4_low_clear) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 4.4V back to normal\n");
-        Clear_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
+      if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_4_4)) {
+        if (voltage > run_status.thr_table.vol_4_4_high_alarm || voltage < run_status.thr_table.vol_4_4_low_alarm) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 4.4V abnormal, current voltage = %.3lfV\n", voltage);
+          Set_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.vol_4_4_high_clear && voltage >= run_status.thr_table.vol_4_4_low_clear) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 4.4V back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_VOLTAGE_4_4);
+        }
       }
     }
 
@@ -874,16 +860,16 @@ void monitorTask(void *argument)
       value = 0;
     } else {
       voltage = (double)value / 4096 * 2.5 * 3;
-    }
-    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_5_0)) {
-      if (voltage > run_status.thr_table.vol_5_0_high_alarm || voltage < run_status.thr_table.vol_5_0_low_alarm) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 5V abnormal, current voltage = %.3lfV\n", voltage);
-        Set_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
-      }
-    } else {
-      if (voltage <= run_status.thr_table.vol_5_0_high_clear && voltage >= run_status.thr_table.vol_5_0_low_clear) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 5V back to normal\n");
-        Clear_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
+      if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_5_0)) {
+        if (voltage > run_status.thr_table.vol_5_0_high_alarm || voltage < run_status.thr_table.vol_5_0_low_alarm) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 5V abnormal, current voltage = %.3lfV\n", voltage);
+          Set_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.vol_5_0_high_clear && voltage >= run_status.thr_table.vol_5_0_low_clear) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 5V back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_VOLTAGE_5_0);
+        }
       }
     }
 
@@ -893,16 +879,16 @@ void monitorTask(void *argument)
       value = 0;
     } else {
       voltage = (double)value / 4096 * 2.5 * 51;
-    }
-    if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_61_0)) {
-      if (voltage > run_status.thr_table.vol_61_0_high_alarm || voltage < run_status.thr_table.vol_61_0_low_alarm) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 61V abnormal, current voltage = %.3lfV\n", voltage);
-        Set_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
-      }
-    } else {
-      if (voltage <= run_status.thr_table.vol_61_0_high_clear && voltage >= run_status.thr_table.vol_61_0_low_clear) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 61V back to normal\n");
-        Clear_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
+      if (!Is_Flag_Set(&run_status.exp, EXP_VOLTAGE_61_0)) {
+        if (voltage > run_status.thr_table.vol_61_0_high_alarm || voltage < run_status.thr_table.vol_61_0_low_alarm) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 64V abnormal, current voltage = %.3lfV\n", voltage);
+          Set_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
+        }
+      } else {
+        if (voltage <= run_status.thr_table.vol_61_0_high_clear && voltage >= run_status.thr_table.vol_61_0_low_clear) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Voltage 64V back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_VOLTAGE_61_0);
+        }
       }
     }
 
@@ -912,75 +898,136 @@ void monitorTask(void *argument)
       value = 0;
     } else {
       temp = Cal_Temp(value);
-    }
-    if (!Is_Flag_Set(&run_status.exp, EXP_TEMPERATURE)) {
-      if (temp > run_status.thr_table.temp_high_alarm || temp < run_status.thr_table.temp_low_alarm) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Temperature abnormal, current temperature = %.3lfC\n", temp);
-        Set_Flag(&run_status.exp, EXP_TEMPERATURE);
-      }
-    } else {
-      if (temp <= run_status.thr_table.temp_high_clear && temp >= run_status.thr_table.temp_low_clear) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Temperature back to normal\n");
-        Clear_Flag(&run_status.exp, EXP_TEMPERATURE);
+      if (!Is_Flag_Set(&run_status.exp, EXP_TEMPERATURE)) {
+        if (temp > run_status.thr_table.temp_high_alarm || temp < run_status.thr_table.temp_low_alarm) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Temperature abnormal, current temperature = %.3lfC\n", temp);
+          Set_Flag(&run_status.exp, EXP_TEMPERATURE);
+        }
+      } else {
+        if (temp <= run_status.thr_table.temp_high_clear && temp >= run_status.thr_table.temp_low_clear) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Temperature back to normal\n");
+          Clear_Flag(&run_status.exp, EXP_TEMPERATURE);
+        }
       }
     }
 
-#if 0
-    if (run_status.tosa_enable) {
-      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_CURRENT_CHANNEL, &value);
-      if (status != osOK) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-      } else {
-        voltage = (double)value / 4096 * 2.5;
-        voltage = (voltage - 1.25) / 0.285 * 1000;
-      }
-      if (!Is_Flag_Set(&run_status.exp, EXP_TEC_CURRENT)) {
-        if (voltage > run_status.thr_table.tec_cur_high_alarm || voltage < run_status.thr_table.tec_cur_low_alarm) {
-          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec current abnormal, current current = %.lfmA\n", voltage);
-          Set_Flag(&run_status.exp, EXP_TEC_CURRENT);
+#if 1
+    if (run_status.allow_monitor) {
+      if (run_status.tosa_enable) {
+        status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_CURRENT_CHANNEL, &value);
+        if (status != osOK) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        } else {
+          voltage = (double)value / 4096 * 2.5;
+          voltage = (voltage - 1.25) / 0.285 * 1000;
+          if (!Is_Flag_Set(&run_status.exp, EXP_TEC_CURRENT)) {
+            if (voltage > run_status.thr_table.tec_cur_high_alarm || voltage < run_status.thr_table.tec_cur_low_alarm) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec current abnormal, current current = %.lfmA\n", voltage);
+              Set_Flag(&run_status.exp, EXP_TEC_CURRENT);
+            }
+          } else {
+            if (voltage <= run_status.thr_table.tec_cur_high_clear && voltage >= run_status.thr_table.tec_cur_low_clear) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec current back to normal\n");
+              Clear_Flag(&run_status.exp, EXP_TEC_CURRENT);
+            }
+          }
         }
-      } else {
-        if (voltage <= run_status.thr_table.tec_cur_high_clear && voltage >= run_status.thr_table.tec_cur_low_clear) {
-          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec current back to normal\n");
-          Clear_Flag(&run_status.exp, EXP_TEC_CURRENT);
-        }
-      }
 
-      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_VOLTAGE_CHANNEL, &value);
-      if (status != osOK) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-      } else {
-        voltage = (double)value / 4096 * 2.5;
-        voltage = (voltage - 1.25) / 0.25 * 1000;
+        status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_VOLTAGE_CHANNEL, &value);
+        if (status != osOK) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        } else {
+          voltage = (double)value / 4096 * 2.5;
+          voltage = (voltage - 1.25) / 0.25 * 1000;
+          if (!Is_Flag_Set(&run_status.exp, EXP_TEC_VOLTAGE)) {
+            if (voltage > run_status.thr_table.tec_vol_high_alarm || voltage < run_status.thr_table.tec_vol_low_alarm) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec voltage abnormal, current voltage = %.lfmV\n", voltage);
+              Set_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+            }
+          } else {
+            if (voltage <= run_status.thr_table.tec_vol_high_clear && voltage >= run_status.thr_table.tec_vol_low_clear) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec voltage back to normal\n");
+              Clear_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+            }
+          }
+        }
       }
-      if (!Is_Flag_Set(&run_status.exp, EXP_TEC_VOLTAGE)) {
-        if (voltage > run_status.thr_table.tec_vol_high_alarm || voltage < run_status.thr_table.tec_vol_low_alarm) {
-          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec voltage abnormal, current voltage = %.lfmV\n", voltage);
-          Set_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+  #endif
+      
+      if (run_status.tosa_enable) {
+        // Power
+        if (!run_status.modulation) {
+          if ((ret = Get_Tap_Power(&voltage)) != 0) {
+            if (!Is_Flag_Set(&run_status.internal_exp, INT_EXP_TAP_PD)) {
+              THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u\n", ret);
+              Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
+            }
+          } else {
+            temp = run_status.tosa_dst_power_high - voltage;
+            if (temp > 2 || temp < -2) {
+              if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+                THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf, destination is %lf\n", voltage, run_status.tosa_dst_power_high);
+                Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+              }
+            } else {
+              if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+                THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf back to normal\n", voltage);
+                Clear_Flag(&run_status.exp, EXP_LAZER_POWER);
+              }
+            }
+          }
         }
-      } else {
-        if (voltage <= run_status.thr_table.tec_vol_high_clear && voltage >= run_status.thr_table.tec_vol_low_clear) {
-          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec voltage back to normal\n");
-          Clear_Flag(&run_status.exp, EXP_TEC_VOLTAGE);
+
+        // TEC LOSS LOCK
+        if (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
+          if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          }
+        } else {
+          if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+            Clear_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          }
         }
-      }
-    }
-#endif
-    
-    if (run_status.tosa_enable) {
-      if (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-        if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
-          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+        
+        // Tec Temperature
+        status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &value);
+        if (status != osOK) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+          value = 0;
+        } else {
+          temp = Cal_Tosa_Temp(value);
+          if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP)) {
+            if (temp > run_status.thr_table.tec_temp_high_alarm || temp < run_status.thr_table.tec_temp_low_alarm) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec Temperature abnormal, current temperature = %.3lfC\n", temp);
+              Set_Flag(&run_status.exp, EXP_TEC_TEMP);
+            }
+          } else {
+            if (temp <= run_status.thr_table.tec_temp_high_clear && temp >= run_status.thr_table.tec_temp_low_clear) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tec Temperature back to normal\n");
+              Clear_Flag(&run_status.exp, EXP_TEC_TEMP);
+            }
+          }
         }
-        if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP)) {
-          Set_Flag(&run_status.exp, EXP_TEC_TEMP);
-        }
-      } else {
-        if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
-          Clear_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-        }
-        if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP)) {
-          Clear_Flag(&run_status.exp, EXP_TEC_TEMP);
+
+        // LD Current
+        status = RTOS_ADC7953_SPI5_Read(TEC_ADC_LD_CURRENT_CHANNEL, &value);
+        if (status != osOK) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+          value = 0;
+        } else {
+          temp = (double)value / 4096 * 2.5;
+          temp = temp / 22 * 1000;
+          if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_CURRENT)) {
+            if (temp > run_status.thr_table.LD_cur_high_alarm) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "LD Current abnormal, current temperature = %.3lfC\n", temp);
+              Set_Flag(&run_status.exp, EXP_LAZER_CURRENT);
+            }
+          } else {
+            if (temp <= run_status.thr_table.LD_cur_high_clear) {
+              THROW_LOG(MSG_TYPE_NORMAL_LOG, "LD Current back to normal\n");
+              Clear_Flag(&run_status.exp, EXP_LAZER_CURRENT);
+            }
+          }
         }
       }
     }
@@ -1016,8 +1063,9 @@ void lazerManagerTask(void *argument)
   uint8_t buf[2];
   uint8_t i, ret;
   MsgStruct msg;
-  double power_h, power_l, power_dst;
+  double power_h, power_l, power_dst, power_tap;
   uint32_t u_val32;
+  uint8_t print_control = 0, cmdPro_control = 0;
 
   osDelay(pdMS_TO_TICKS(500));
 
@@ -1028,9 +1076,15 @@ void lazerManagerTask(void *argument)
       continue;
 
     if (msg.type == MSG_TYPE_LAZER_ENABLE) {
-      if (Enable_Tosa()) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+      if ((ret = Enable_Tosa()) != 0) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
+        if (!print_control) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Enable Tosa failed, ret = %u\n", ret);
+          print_control = 1;
+        }
+        continue;
       }
+      print_control = 0;
       run_status.tosa_enable = 1;
       msg.pbuf = pvPortMalloc(8);
       msg.length = 8;
@@ -1040,12 +1094,13 @@ void lazerManagerTask(void *argument)
       osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
     } else if (msg.type == MSG_TYPE_LAZER_DISABLE) {
       Clear_Lazer_Ready();
+      run_status.allow_monitor = 0;
       if (Disable_Tosa()) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
       }
       run_status.tosa_enable = 0;
     } else if (msg.type == MSG_TYPE_LAZER_POWER) {
-
+      Clear_Lazer_Ready();
       u_val32 = Buffer_To_BE32((uint8_t*)msg.pbuf);
       if (u_val32 != 0xFFFFFFFF) {
         power_h = (double)(int32_t)u_val32 / 100;
@@ -1053,11 +1108,17 @@ void lazerManagerTask(void *argument)
         power_l = (double)(int32_t)u_val32 / 100;
         run_status.tosa_high = Get_Tosa_Data(power_h);
         run_status.tosa_low = Get_Tosa_Data(power_l);
+        cmdPro_control = 1;
       } else {
-        power_h = run_status.tosa_high.tap_power;
-        power_l = run_status.tosa_low.tap_power;
+        //power_h = run_status.tosa_high.tap_power;
+        //power_l = run_status.tosa_low.tap_power;
+        power_h = run_status.tosa_dst_power_high;
+        power_l = run_status.tosa_dst_power_low;
       }
-      vPortFree(msg.pbuf);
+      if (msg.pbuf != NULL) {
+        vPortFree(msg.pbuf);
+        msg.pbuf = NULL;
+      }
 
       i = 0;
       power_dst = power_h;
@@ -1081,8 +1142,10 @@ void lazerManagerTask(void *argument)
             if (++u_val32 > 100) {
               THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
               Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
+              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
             }
           }
+          Update_Tec_Dest_Temp(&run_status.thr_table);
         }
 
         // Set tosa
@@ -1093,74 +1156,217 @@ void lazerManagerTask(void *argument)
         
         // check power
         if (run_status.tosa_enable && !run_status.modulation) {
-          if ((ret = Get_Tap_Power(&power_h)) != 0) {
+          if ((ret = Get_Tap_Power(&power_tap)) != 0) {
             THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u\n", ret);
             Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
+            i = 101;
+            break;
           }
-          if (power_h > power_dst + 0.3 || power_h < power_dst - 0.3) {
-            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf, destination is %lf\r\n", power_h, power_dst);
-            power_h = power_dst - (power_h - power_dst);
+          if (power_tap < -10) {
+            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap Power = %lf is not normal!\n", power_tap);
+            i = 103;
+            break;
+          }
+          if (power_tap > power_dst + 0.3 || power_tap < power_dst - 0.3) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Tap power = %lf, destination is %lf\n", power_tap, power_dst);
+            power_h = power_dst - (power_tap - power_dst);
+#if 0
             if (power_h > tosa_power_high_max_thr + 2 || power_l < tosa_power_low_min_thr - 2) {
               THROW_LOG(MSG_TYPE_ERROR_LOG, "Module cannot reach dest power, power_h = %lf\n", power_h);
               Set_Flag(&run_status.exp, EXP_LAZER_POWER);
-              i = 100;
+              i = 101;
               break;
             }
-            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Research power data = %lf. times = %u\r\n", power_h, i);
+#endif
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Research power data = %lf. times = %u\n", power_h, i);
             run_status.tosa_high = Get_Tosa_Data(power_h);
+            if (run_status.tosa_high.tosa_dac > 0x10000 * 0.95) {
+              THROW_LOG(MSG_TYPE_ERROR_LOG, "Dac value exceeds limitation %#X\n", run_status.tosa_high.tosa_dac);
+              i = 102;
+              break;
+            }
           } else {
+            i = 0;
             break;
           }
         }
-      } while (i < 3 && run_status.tosa_enable && !run_status.modulation);
+      } while (run_status.tosa_enable && !run_status.modulation);
       
-      if (i >= 3) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
-      } else {
+      if (i == 0) {
+        if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+          Clear_Flag(&run_status.exp, EXP_LAZER_POWER);
+        }
+        if (Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
+          Clear_Flag(&run_status.exp, EXP_LAZER_AGING);
+        }
         Set_Lazer_Ready();
+        run_status.allow_monitor = 1;
+        //return success
+        if (cmdPro_control) {
+          msg.type = MSG_TYPE_CMD_PROCESS;
+          msg.pbuf = pvPortMalloc(1);
+          msg.length = 1;
+          *(uint8_t*)msg.pbuf = 0;
+          osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+          cmdPro_control = 0;
+        }
+      } else if (i == 101 || i == 103) {
+        // close tosa
+        run_status.allow_monitor = 0;
+        allow_tosa = 0;
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
+        if (Disable_Tosa()) {
+          Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
+        }
+        run_status.tosa_enable = 0;
+        // reutrn failure
+        if (cmdPro_control) {
+          msg.type = MSG_TYPE_CMD_PROCESS;
+          msg.pbuf = pvPortMalloc(1);
+          msg.length = 1;
+          *(uint8_t*)msg.pbuf = 1;
+          osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+          cmdPro_control = 0;
+        }
+      } else if (i == 102) {
+        if (power_tap < 0) {
+          // restore
+          run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+          run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+          // aging alarm
+          if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
+            Set_Flag(&run_status.exp, EXP_LAZER_AGING);
+          }
+          // close tosa
+          allow_tosa = 0;
+          run_status.allow_monitor = 0;
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
+          if (Disable_Tosa()) {
+            Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
+          }
+          run_status.tosa_enable = 0;
+          // return failure
+          if (cmdPro_control) {
+            msg.type = MSG_TYPE_CMD_PROCESS;
+            msg.pbuf = pvPortMalloc(1);
+            msg.length = 1;
+            *(uint8_t*)msg.pbuf = 1;
+            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+            cmdPro_control = 0;
+          }
+        } else {
+          // power alarm
+          if (power_tap > power_dst + 2 || power_tap < power_dst - 2) {
+            if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+              Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+            }
+          }
+          run_status.allow_monitor = 1;
+          // return success
+          if (cmdPro_control) {
+            msg.type = MSG_TYPE_CMD_PROCESS;
+            msg.pbuf = pvPortMalloc(1);
+            msg.length = 1;
+            *(uint8_t*)msg.pbuf = 0;
+            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+            cmdPro_control = 0;
+          }
+        }
       }
-
     } else if (msg.type == MSG_TYPE_SELF_TEST) {
+      if (Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+        Clear_Flag(&run_status.exp, EXP_SELFCHECK);
+      }
+      if (Is_Flag_Set(&run_status.exp, EXP_RX_PD)) {
+        Clear_Flag(&run_status.exp, EXP_RX_PD);
+      }
+      if (Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
+        Clear_Flag(&run_status.exp, EXP_SWITCH);
+      }
+  
       run_status.osc_status = OSC_ONGOING;
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
       osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
     } else if (msg.type == MSG_TYPE_SELF_TEST_STEP_2) {
+      if (run_status.osc_status == OSC_FAILURE) {
+        if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+          Set_Flag(&run_status.exp, EXP_SELFCHECK);
+        }
+        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+        osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
+        continue;
+      }
+
       if ((ret = Get_Tap_Power(&power_h)) != 0) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed because get tap-pd failed.\n");
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u when self_check\n", ret);
         Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
+        if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+          Set_Flag(&run_status.exp, EXP_SELFCHECK);
+        }
         run_status.osc_status = OSC_FAILURE;
+        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+        osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
       power_l = run_status.tosa_dst_power_high - power_h;
-      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Tap power = %lf, dest power is %lf\r\n", power_h, run_status.tosa_dst_power_high);
+      // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Tap power = %lf, dest power is %lf\r\n", power_h, run_status.tosa_dst_power_high);
       if (power_l > 2 || power_l < -2) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed, Tap power = %lf, destination is %lf\r\n", power_h, run_status.tosa_dst_power_high);
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed.\n");
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf, destination is %lf\n", power_h, run_status.tosa_dst_power_high);
+        if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+          Set_Flag(&run_status.exp, EXP_SELFCHECK);
+        }
+        if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+          Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+        }
         run_status.osc_status = OSC_FAILURE;
+        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+        osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
-      
+
       if ((ret = Get_Rx_Power(&power_h)) != 0) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed because get rx-pd failed.\n");
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Rx_Power error code = %u when self_check\n", ret);
         Set_Flag(&run_status.internal_exp, INT_EXP_RX_PD);
+        if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+          Set_Flag(&run_status.exp, EXP_SELFCHECK);
+        }
         run_status.osc_status = OSC_FAILURE;
+        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+        osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
       status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_LB_IL + 2, buf, 2);
       // power_dst is loopback insertion loss vale
       power_dst = (double)(int16_t)Buffer_To_BE16(buf) / 100;
       power_l = run_status.tosa_dst_power_high - (power_h + power_dst);
-      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Rx power = %lf, IL = %lf, dest power is %lf, \r\n", power_h, power_dst, run_status.tosa_dst_power_high);
+      // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Rx power = %lf, IL = %lf, dest power is %lf, \r\n", power_h, power_dst, run_status.tosa_dst_power_high);
       if (power_l > 3 || power_l < -3) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed, Rx power = %lf, IL = %lf, destination is %lf, \r\n", power_h, power_dst, run_status.tosa_dst_power_high);
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed.\n");
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Rx power = %lf, IL = %lf, destination is %lf\n", power_h, power_dst, run_status.tosa_dst_power_high);
         if (power_l > 60 || power_l < -60) {
           if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
             Set_Flag(&run_status.exp, EXP_SWITCH);
           }
+        } else {
+          if (!Is_Flag_Set(&run_status.exp, EXP_RX_PD)) {
+            Set_Flag(&run_status.exp, EXP_RX_PD);
+          }
+        }
+        if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+          Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
         run_status.osc_status = OSC_FAILURE;
+        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+        osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
 
+      if (Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
+        Clear_Flag(&run_status.exp, EXP_SELFCHECK);
+      }
       run_status.osc_status = OSC_SUCCESS;
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
       osMessageQueuePut(mid_ISR, &msg, 0U, 0U);

@@ -243,17 +243,81 @@ osStatus_t Get_Threshold_Table(ThresholdStruct *table)
   table->temp_low_alarm = -10 * 1.01;
   table->temp_low_clear = -10 * 1.00;
 
-  table->tec_cur_high_alarm = 4000 * 1.01;
-  table->tec_cur_high_clear = 4000 * 1.00;
-  table->tec_cur_low_alarm = -4000 * 1.01;
-  table->tec_cur_low_clear = -4000 * 1.00;
+  table->tec_cur_high_alarm = 600;
+  table->tec_cur_high_clear = 550;
+  table->tec_cur_low_alarm = -600;
+  table->tec_cur_low_clear = -550;
 
-  table->tec_vol_high_alarm = 4000 * 1.01;
-  table->tec_vol_high_clear = 4000 * 1.00;
-  table->tec_vol_low_alarm = -4000 * 1.01;
-  table->tec_vol_low_clear = -4000 * 1.00;
+  table->tec_vol_high_alarm = 1800;
+  table->tec_vol_high_clear = 1750;
+  table->tec_vol_low_alarm = -1800;
+  table->tec_vol_low_clear = -1750;
+
+  table->tec_temp_high_alarm = 0;
+  table->tec_temp_high_clear = 0;
+  table->tec_temp_low_alarm = 0;
+  table->tec_temp_low_clear = 0;
+
+  table->LD_cur_high_alarm = 88;
+  table->LD_cur_high_clear = 80;
 
   return osOK;
+}
+
+osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
+{
+  osStatus_t status;
+  uint16_t value;
+  double temp;
+
+  status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &value);
+  if (status != osOK) {
+    return status;
+  }
+  temp = Cal_Tosa_Temp(value);
+
+  table->tec_temp_high_alarm = temp + 5;
+  table->tec_temp_high_clear = temp + 4.95;
+  table->tec_temp_low_alarm = temp - 5;
+  table->tec_temp_low_clear = temp - 4.95;
+
+  return status;
+}
+
+void Check_Cali(void)
+{
+  uint16_t start = 0x1000;
+  uint16_t end = EE_PARA_TABLE_END;
+  uint16_t offset;
+  uint8_t buf[4];
+  uint32_t crc32 = 0xFFFFFFFF;
+  uint32_t chk;
+  
+  if (get_32_from_eeprom(EEPROM_ADDR, EE_CALI_CHECK, &chk) != osOK) {
+    return;
+  }
+
+  for (offset = start; offset < end; offset += 4) {
+    if (RTOS_EEPROM_Read(EEPROM_ADDR, offset, buf, 4) != osOK) {
+      return ;
+    }
+    
+    crc32 = Cal_CRC32_2(buf, 4, crc32);
+  }
+  
+  crc32 = ~crc32;
+  
+  if (crc32 != chk) {
+    if (!Is_Flag_Set(&run_status.exp, EXP_CALI_CHK)) {
+      Set_Flag(&run_status.exp, EXP_CALI_CHK);
+    }
+  } else {
+    if (Is_Flag_Set(&run_status.exp, EXP_CALI_CHK)) {
+      Clear_Flag(&run_status.exp, EXP_CALI_CHK);
+    }
+  }
+  
+  return;
 }
 
 osStatus_t Get_EEPROM_Alarm_Status(AlarmHistoryState *alarm)
@@ -562,11 +626,13 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   else
     val_y = (uint32_t)ny;
   EPT("First switch DA/AD value: val_x = %d, std_x = %d, val_y = %d, std_y = %d\n", val_x, std_x, val_y, std_y);
-  if (!Is_Value_Approximate(val_x, my_abs(std_x), 0.05) || !Is_Value_Approximate(val_y, my_abs(std_y), 0.05)) {
+  if (!Is_Value_Approximate(val_x, my_abs(std_x)) || !Is_Value_Approximate(val_y, my_abs(std_y))) {
     EPT("First level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
     THROW_LOG(MSG_TYPE_ERROR_LOG, "First level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
+    Set_Switch_Alarm(first_switch);
     return -5;
   }
+  Clear_Switch_Alarm(first_switch);
 
   second_switch = channel_map[index].second_switch;
   if (switch_channel == TX_SWITCH_CHANNEL) {
@@ -605,17 +671,71 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
   else
     val_y = (uint32_t)ny;
   EPT("Second switch DA/AD value: val_x = %d, std_x = %d, val_y = %d, std_y = %d\n", val_x, std_x, val_y, std_y);
-  if (!Is_Value_Approximate(val_x, my_abs(std_x), 0.05) || !Is_Value_Approximate(val_y, my_abs(std_y), 0.05)) {
+  if (!Is_Value_Approximate(val_x, my_abs(std_x)) || !Is_Value_Approximate(val_y, my_abs(std_y))) {
     EPT("Second level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Second level switch DA/AD different: %u, %d, %u, %d\n", val_x, std_x, val_y, std_y);
+    Set_Switch_Alarm(second_switch);
     return -9;
   }
+  Clear_Switch_Alarm(second_switch);
 
   if (switch_channel == TX_SWITCH_CHANNEL) {
     return run_status.tx_switch_channel;
   } else {
     return run_status.rx_switch_channel;
   }
+}
+
+void Set_Switch_Alarm(uint8_t sw_num)
+{
+  uint32_t alarm_bit;
+  
+  switch (sw_num) {
+    case SWITCH_NUM_1:
+    case SWITCH_NUM_2:
+      alarm_bit = EXP_SWICH_VOLTAGE1;
+      break;
+    case SWITCH_NUM_3:
+    case SWITCH_NUM_4:
+      alarm_bit = EXP_SWICH_VOLTAGE2;
+      break;
+    case SWITCH_NUM_5:
+    case SWITCH_NUM_6:
+      alarm_bit = EXP_SWICH_VOLTAGE3;
+      break;
+    case SWITCH_NUM_7:
+    case SWITCH_NUM_8:
+      alarm_bit = EXP_SWICH_VOLTAGE4;
+      break;
+  }
+  
+  Set_Flag(&run_status.exp, alarm_bit);
+}
+
+void Clear_Switch_Alarm(uint8_t sw_num)
+{
+  uint32_t alarm_bit;
+  
+  switch (sw_num) {
+    case SWITCH_NUM_1:
+    case SWITCH_NUM_2:
+      alarm_bit = EXP_SWICH_VOLTAGE1;
+      break;
+    case SWITCH_NUM_3:
+    case SWITCH_NUM_4:
+      alarm_bit = EXP_SWICH_VOLTAGE2;
+      break;
+    case SWITCH_NUM_5:
+    case SWITCH_NUM_6:
+      alarm_bit = EXP_SWICH_VOLTAGE3;
+      break;
+    case SWITCH_NUM_7:
+    case SWITCH_NUM_8:
+      alarm_bit = EXP_SWICH_VOLTAGE4;
+      break;
+  }
+  
+  Clear_Flag(&run_status.exp, alarm_bit);
 }
 
 int8_t Get_Current_Switch_ADC(uint8_t switch_channel, int16_t *x1, int16_t *y1, int16_t *x2, int16_t *y2)
@@ -849,6 +969,9 @@ void Init_Run_Status(void)
   run_status.osc_status = OSC_FAILURE;
   run_status.tosa_dst_power_high = 0;
   run_status.tosa_dst_power_low = -4;
+  run_status.allow_monitor = 0;
+  run_status.sw_adc_int = 200;
+  run_status.sw_adc_double = 0.05;
 }
 
 void Set_Switch_Ready(uint8_t switch_channel)
@@ -932,6 +1055,11 @@ uint8_t Enable_Tosa()
 {
   osStatus_t status;
   uint32_t i = 0;
+
+  if (tosa_table_count == 0) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_TOSA_DATA);
+    return 4;
+  }
 
   status = RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 4095, DAC128S085_MODE_NORMAL);
   if (status != osOK) {
@@ -1332,7 +1460,16 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
 
   switch (per_id) {
     case 0:
-      BE32_To_Buffer(0x80000000, pBuf);
+      status = RTOS_ADC7953_SPI5_Read(TEC_ADC_LD_CURRENT_CHANNEL, &u_val16);
+      if (status != osOK) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
+        BE32_To_Buffer(0x80000000, pBuf);
+      } else {
+        d_val = (double)u_val16 / 4096 * 2.5;
+        d_val = d_val / 22 * 1000;
+        val32 = (uint32_t)(int32_t)d_val;
+        BE32_To_Buffer(val32, pBuf);
+      }
       break;
     case 1:
       status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &u_val16);
@@ -1563,11 +1700,27 @@ uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
         run_status.thr_table.temp_high_clear = run_status.thr_table.temp_high_alarm * 0.99;
       break;
     case 1:
+      run_status.thr_table.tec_temp_low_alarm = (double)val32_low / 10;
+      if (run_status.thr_table.tec_temp_low_alarm < 0)
+        run_status.thr_table.tec_temp_low_clear = run_status.thr_table.tec_temp_low_alarm * 0.99;
+      else
+        run_status.thr_table.tec_temp_low_clear = run_status.thr_table.tec_temp_low_alarm * 1.01;
+
+      run_status.thr_table.tec_temp_high_alarm = (double)val32_high / 10;
+      if (run_status.thr_table.tec_temp_high_alarm < 0)
+        run_status.thr_table.tec_temp_high_clear = run_status.thr_table.tec_temp_high_alarm * 1.01;
+      else
+        run_status.thr_table.tec_temp_high_clear = run_status.thr_table.tec_temp_high_alarm * 0.99;
       break;
     case 2:
+      run_status.thr_table.LD_cur_high_alarm = (double)val32_high;
+      if (run_status.thr_table.LD_cur_high_alarm < 0)
+        run_status.thr_table.LD_cur_high_clear = run_status.thr_table.LD_cur_high_alarm * 1.01;
+      else
+        run_status.thr_table.LD_cur_high_clear = run_status.thr_table.LD_cur_high_alarm * 0.99;
       break;
     case 3:
-#if 0
+#if 1
       run_status.thr_table.tec_cur_low_alarm = (double)val32_low;
       if (run_status.thr_table.tec_cur_low_alarm < 0)
         run_status.thr_table.tec_cur_low_clear = run_status.thr_table.tec_cur_low_alarm * 0.99;
@@ -1582,7 +1735,7 @@ uint8_t Set_Threshold(uint8_t alarm_id, int32_t val32_low, int32_t val32_high)
 #endif
       break;
     case 4:
-#if 0
+#if 1
       run_status.thr_table.tec_vol_low_alarm = (double)val32_low;
       if (run_status.thr_table.tec_vol_low_alarm < 0)
         run_status.thr_table.tec_vol_low_clear = run_status.thr_table.tec_vol_low_alarm * 0.99;
@@ -1653,15 +1806,24 @@ uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf)
       BE32_To_Buffer(val32, pBuf + 4);
       break;
     case 1:
-      BE32_To_Buffer(0x80000000, pBuf);
-      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      if (run_status.thr_table.tec_temp_low_alarm < 0)
+        val32 = (int32_t)(run_status.thr_table.tec_temp_low_alarm * 10 - 0.5);
+      else
+        val32 = (int32_t)(run_status.thr_table.tec_temp_low_alarm * 10 + 0.5);
+      BE32_To_Buffer(val32, pBuf);
+      if (run_status.thr_table.tec_temp_high_alarm < 0)
+        val32 = (int32_t)(run_status.thr_table.tec_temp_high_alarm * 10 - 0.5);
+      else
+        val32 = (int32_t)(run_status.thr_table.tec_temp_high_alarm * 10 + 0.5);
+      BE32_To_Buffer(val32, pBuf + 4);
       break;
     case 2:
       BE32_To_Buffer(0x80000000, pBuf);
-      BE32_To_Buffer(0x7FFFFFFF, pBuf + 4);
+      val32 = (int32_t)run_status.thr_table.LD_cur_high_alarm;
+      BE32_To_Buffer(val32, pBuf + 4);
       break;
     case 3:
-#if 0
+#if 1
       val32 = (int32_t)run_status.thr_table.tec_cur_low_alarm;
       BE32_To_Buffer(val32, pBuf);
       val32 = (int32_t)run_status.thr_table.tec_cur_high_alarm;
@@ -1672,7 +1834,7 @@ uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf)
 #endif
       break;
     case 4:
-#if 0
+#if 1
       val32 = (int32_t)run_status.thr_table.tec_vol_low_alarm;
       BE32_To_Buffer(val32, pBuf);
       val32 = (int32_t)run_status.thr_table.tec_vol_high_alarm;
@@ -2219,7 +2381,7 @@ uint8_t debug_set_tec(uint16_t value)
   return RESPOND_SUCCESS;
 }
 
-uint8_t debug_get_tosa_tmp()
+ uint8_t debug_get_tosa_tmp()
 {
   osStatus_t status;
   uint16_t value;
@@ -2400,5 +2562,30 @@ uint8_t debug_get_inter_exp(void)
   return RESPOND_SUCCESS;
 }
 
+uint8_t debug_Cmd_Check_Cali(void)
+{
+  uint16_t start = 0x1000;
+  uint16_t end = EE_PARA_TABLE_END;
+  uint16_t offset;
+  uint8_t buf[4];
+  uint32_t crc32 = 0xFFFFFFFF;
+  
+  for (offset = start; offset < end; offset += 4) {
+    if (RTOS_EEPROM_Read(EEPROM_ADDR, offset, buf, 4) != osOK) {
+      return RESPOND_FAILURE;
+    }
+    
+    crc32 = Cal_CRC32_2(buf, 4, crc32);
+  }
+  
+  crc32 = ~crc32;
+
+  BE32_To_Buffer(crc32, resp_buf.buf);
+  if (RTOS_EEPROM_Write(EEPROM_ADDR, EE_CALI_CHECK, resp_buf.buf, 4) !=osOK) {
+    return RESPOND_FAILURE;
+  }
+  
+  return RESPOND_SUCCESS;
+}
 
 

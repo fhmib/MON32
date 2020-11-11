@@ -273,9 +273,9 @@ int8_t cmd_IL(uint8_t argc, char **argv)
     return ret;
   }
 
-  PRINT("Insertion Loss:\r\n");
+  PRINT("Insertion Loss %u:\r\n", rBuf[CMD_SEQ_MSG_DATA]);
   for (i = 0; i < 64; ++i) {
-    val = (int16_t)Buffer_To_BE16(&rBuf[CMD_SEQ_MSG_DATA + i * 2]);
+    val = (int16_t)Buffer_To_BE16(&rBuf[CMD_SEQ_MSG_DATA + 1 + i * 2]);
     val_f = (double)val / 100;
     PRINT("%u,%.2lf\r\n", i + 1, val_f);
   }
@@ -426,8 +426,6 @@ int8_t cmd_voltage(uint8_t argc, char **argv)
 {
   if (argc == 2 && !strcasecmp(argv[1], "get")) {
     return get_voltage();
-//  } else if (argc == 3 && !strcasecmp(argv[1], "get") && !strcasecmp(argv[2], "thr")) {
-//    return get_voltage_threshold();
   } else {
     cmd_help2(argv[0]);
   }
@@ -646,7 +644,7 @@ int8_t upgrade_file(uint8_t verify)
   int8_t ret;
   uint32_t fw_crc;
   uint16_t seq = 1;
-  uint32_t fw_length, every_size = FW_BLOCK_MAX_SIZE, send_size = 0;
+  uint32_t fw_length, every_size, send_size = 0;
   uint8_t retry = 0;
 
   HAL_Delay(1);
@@ -666,7 +664,19 @@ int8_t upgrade_file(uint8_t verify)
            (fw_buf[FW_HEAD_FW_LENGTH + 2] << 8) | (fw_buf[FW_HEAD_FW_LENGTH + 3] << 0);
   fw_crc = (fw_buf[FW_HEAD_CRC] << 24) | (fw_buf[FW_HEAD_CRC + 1] << 16) |\
            (fw_buf[FW_HEAD_CRC + 2] << 8) | (fw_buf[FW_HEAD_CRC + 3] << 0);
-  HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256, fw_length, 1000 * 10);
+  if (fw_length > 0xFFFF) {
+    every_size = 0xFF00;
+    while (send_size < fw_length) {
+      if (send_size + every_size > fw_length) {
+        HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256 + send_size, fw_length - send_size, 1000 * 10);
+        send_size += fw_length - send_size;
+      } else {
+        HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256 + send_size, every_size, 1000 * 10);
+        send_size += every_size;
+      }
+    }
+  } else
+    HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256, fw_length, 1000 * 10);
   PRINT2("Download success, Length = %u, crc = %#X\r\n", fw_length, fw_crc);
   if (verify) {
     if (Cal_CRC32(&fw_buf[256], fw_length) == fw_crc) {
@@ -682,6 +692,8 @@ int8_t upgrade_file(uint8_t verify)
   }
 
   PRINT2("Sending image...\r\n");
+  every_size = FW_BLOCK_MAX_SIZE;
+  send_size = 0;
   while (send_size < fw_length + FW_FILE_HEADER_LENGTH) {
     *(uint16_t*)(&txBuf[0]) = switch_endian_16(seq);
     /*
@@ -825,11 +837,11 @@ int8_t cmd_performance(uint8_t argc, char **argv)
         break;
       case 2:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
-        PRINT("LD_Current : %d(%#X)mA\r\n", val32, val32);
+        PRINT("TEC_Current : %d(%#X)mA\r\n", val32, val32);
         break;
       case 3:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
-        PRINT("LD_Voltage : %d(%#X)mV\r\n", val32, val32);
+        PRINT("TEC_Voltage : %d(%#X)mV\r\n", val32, val32);
         break;
       case 4:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
@@ -1116,6 +1128,8 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_reset_alarm(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "inter_exp")) {
     return debug_get_inter_exp();
+  } else if (argc == 4 && !strcasecmp(argv[1], "sw_adc")) {
+    return debug_set_sw_adc(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "send_hex")) {
     return debug_send_hex(argc, argv);
   } else if (argc == 3 && !strcasecmp(argv[1], "send_hex") && !strcasecmp(argv[2], "no_check")) {
@@ -2035,6 +2049,27 @@ int8_t debug_get_inter_exp()
   return ret;
 }
 
+int8_t debug_set_sw_adc(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint32_t value;
+  double d_val;
+
+  value = strtoul(argv[2], NULL, 10);
+  d_val = atof(argv[4]);
+
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_SET_SW_ADC, txBuf + 4);
+  BE32_To_Buffer(value, txBuf + 8);
+  BE32_To_Buffer((uint32_t)(d_val * 1000), txBuf + 12);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 16, rBuf, &rLen);
+   if (ret) {
+    return ret;
+  }
+
+  return ret;
+}
+
 int8_t debug_send_hex(uint8_t argc, char **argv)
 {
   char *p;
@@ -2111,6 +2146,22 @@ int8_t debug_send_hex(uint8_t argc, char **argv)
   }
 
   return 0;
+}
+
+int8_t debug_check_cali(void)
+{
+  int8_t ret;
+
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_CHECK_CALI, txBuf + 4);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  PRINT("CRC32 : %#X\r\n", Buffer_To_BE32(rBuf + CMD_SEQ_MSG_DATA));
+
+  return ret;
 }
 
 

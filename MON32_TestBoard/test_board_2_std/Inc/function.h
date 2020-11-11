@@ -97,6 +97,8 @@ typedef enum {
   CMD_DEBUG_SET_LP        = 0x16,
   CMD_DEBUG_GET_SW_CHAN   = 0x17,
   CMD_DEBUG_RESET_ALARM   = 0x18,
+  CMD_DEBUG_SET_SW_ADC    = 0x19,
+  CMD_DEBUG_CHECK_CALI    = 0x33,
   CMD_DEBUG_INTER_EXP     = 0xFF,
 } CmdDebugId;
 
@@ -175,7 +177,9 @@ int8_t debug_set_lp(uint8_t argc, char **argv);
 int8_t debug_get_switch_channel(void);
 int8_t debug_reset_alarm(uint8_t argc, char **argv);
 int8_t debug_get_inter_exp(void);
+int8_t debug_set_sw_adc(uint8_t argc, char **argv);
 int8_t debug_send_hex(uint8_t argc, char **argv);
+int8_t debug_check_cali(void);
 
 int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_buf, uint8_t *rx_len);
 uint8_t Cal_Check(uint8_t *pdata, uint32_t len);

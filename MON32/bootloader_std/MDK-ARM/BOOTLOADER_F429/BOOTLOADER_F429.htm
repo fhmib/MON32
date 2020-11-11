@@ -3,11 +3,11 @@
 <title>Static Call Graph - [BOOTLOADER_F429\BOOTLOADER_F429.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image BOOTLOADER_F429\BOOTLOADER_F429.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Thu Sep 17 17:12:46 2020
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Tue Nov 10 16:44:12 2020
 <BR><P>
-<H3>Maximum Stack Usage =        632 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        872 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
-main &rArr; Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+main &rArr; Main_Menu &rArr; startup_process &rArr; erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 <P>
 <H3>
 Mutually Recursive functions
@@ -1026,7 +1026,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[bd]"></a>Main_Menu</STRONG> (Thumb, 1420 bytes, Stack size 64 bytes, menu.o(i.Main_Menu))
-<BR><BR>[Stack]<UL><LI>Max Depth = 632<LI>Call Chain = Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<BR><BR>[Stack]<UL><LI>Max Depth = 872<LI>Call Chain = Main_Menu &rArr; startup_process &rArr; erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;startup_process
 <LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;print_up_status
@@ -1213,11 +1213,12 @@ Global Symbols
 <LI><a href="#[c4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
 <LI><a href="#[6e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_memset
 </UL>
-<BR>[Called By]<UL><LI><a href="#[bd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
+<BR>[Called By]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;startup_process
+<LI><a href="#[bd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
 </UL>
 
 <P><STRONG><a name="[64]"></a>main</STRONG> (Thumb, 72 bytes, Stack size 0 bytes, main.o(i.main))
-<BR><BR>[Stack]<UL><LI>Max Depth = 632<LI>Call Chain = main &rArr; Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<BR><BR>[Stack]<UL><LI>Max Depth = 872<LI>Call Chain = main &rArr; Main_Menu &rArr; startup_process &rArr; erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[bc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MX_USART3_UART_Init
 <LI><a href="#[bb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MX_SPI1_Init
@@ -1243,14 +1244,15 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[bd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
 </UL>
 
-<P><STRONG><a name="[c0]"></a>startup_process</STRONG> (Thumb, 246 bytes, Stack size 320 bytes, upgrade.o(i.startup_process))
-<BR><BR>[Stack]<UL><LI>Max Depth = 568<LI>Call Chain = startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<P><STRONG><a name="[c0]"></a>startup_process</STRONG> (Thumb, 262 bytes, Stack size 320 bytes, upgrade.o(i.startup_process))
+<BR><BR>[Stack]<UL><LI>Max Depth = 808<LI>Call Chain = startup_process &rArr; erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;boot_process
 <LI><a href="#[ce]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Update_Log_Status
 <LI><a href="#[85]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Up_Status
 <LI><a href="#[82]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Log_Status
 <LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;update_config_data
+<LI><a href="#[c1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;erase_up_status
 <LI><a href="#[77]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;FLASH_If_Erase_Bank
 <LI><a href="#[be]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Serial_PutString
 <LI><a href="#[c4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf

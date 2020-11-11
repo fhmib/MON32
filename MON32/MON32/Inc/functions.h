@@ -21,6 +21,7 @@ typedef enum {
   MSG_TYPE_LAZER_POWER,
   MSG_TYPE_SELF_TEST,
   MSG_TYPE_SELF_TEST_STEP_2,
+  MSG_TYPE_CMD_PROCESS,
 } MsgType;
 
 // For Log File
@@ -89,6 +90,8 @@ typedef enum {
   EE_ALARM_MAGIC          = 0x3040,
   EE_ALARM_START          = 0x3044,
   EE_ALARM_END            = 0x3045,
+  // Calibration CRC Check
+  EE_CALI_CHECK           = 0x3048,
 } EepromAddrMap;
 
 typedef enum {
@@ -152,20 +155,29 @@ typedef enum {
 } DAC128S085Channel;
 
 typedef enum {
+  EXP_SELFCHECK           =    0,
   EXP_TEMPERATURE         =    1,
   EXP_VOLTAGE_61_0        =    4,
   EXP_VOLTAGE_4_4         =    5,
   EXP_VOLTAGE_3_3         =    6,
   EXP_VOLTAGE_5_0         =    7,
   EXP_LAZER_POWER         =    8,
+  EXP_SWICH_VOLTAGE4      =    9,
+  EXP_SWICH_VOLTAGE3      =   10,
+  EXP_SWICH_VOLTAGE2      =   11,
+  EXP_SWICH_VOLTAGE1      =   12,
   EXP_DAC                 =   13,
   EXP_ADC_2               =   14,
   EXP_ADC_1               =   15,
   EXP_SWITCH              =   17,
+  EXP_RX_PD               =   18,
+  EXP_LAZER_CURRENT       =   21,
+  EXP_LAZER_AGING         =   22,
   EXP_TEC_TEMP_LOSS       =   23,
   EXP_TEC_VOLTAGE         =   28,
   EXP_TEC_CURRENT         =   29,
   EXP_TEC_TEMP            =   30,
+  EXP_CALI_CHK            =   31,
 } ExptoinValue;
 
 typedef enum {
@@ -181,6 +193,7 @@ typedef enum {
   INT_EXP_TAP_PD          =  9,
   INT_EXP_RX_PD           = 10,
   INT_EXP_TOSA            = 11,
+  INT_EXP_TOSA_DATA       = 12,
   INT_EXP_CONST           = 31,
 } InternalExptoinValue;
 
@@ -227,6 +240,14 @@ typedef struct {
   double tec_vol_high_clear;
   double tec_vol_low_alarm;
   double tec_vol_low_clear;
+
+  double tec_temp_high_alarm;
+  double tec_temp_high_clear;
+  double tec_temp_low_alarm;
+  double tec_temp_low_clear;
+
+  double LD_cur_high_alarm;
+  double LD_cur_high_clear;
 } ThresholdStruct;
 
 typedef enum {
@@ -252,6 +273,9 @@ typedef struct {
   double tosa_dst_power_low;
   double tosa_dst_power_high;
   ThresholdStruct thr_table;
+  uint8_t allow_monitor;
+  uint16_t sw_adc_int;
+  double sw_adc_double;
 } RunTimeStatus;
 
 // For Alarm
@@ -274,6 +298,8 @@ osStatus_t Get_Up_Status(UpgradeFlashState *status);
 osStatus_t Update_Up_Status(UpgradeFlashState *status);
 osStatus_t Reset_Up_Status(void);
 osStatus_t Get_Threshold_Table(ThresholdStruct *table);
+osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table);
+void Check_Cali(void);
 
 osStatus_t Get_EEPROM_Alarm_Status(AlarmHistoryState *alarm);
 osStatus_t Update_EEPROM_Alarm_Status(AlarmHistoryState *alarm);
@@ -283,6 +309,8 @@ osStatus_t Update_History_Alarm(uint32_t exp);
 uint8_t Get_Switch_Position_By_IO(uint8_t switch_channel);
 int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos);
 int8_t Get_Current_Switch_Channel(uint8_t switch_channel);
+void Set_Switch_Alarm(uint8_t sw_num);
+void Clear_Switch_Alarm(uint8_t sw_num);
 int8_t Get_Current_Switch_ADC(uint8_t switch_channel, int16_t *x1, int16_t *y1, int16_t *x2, int16_t *y2);
 int8_t Clear_Switch_Dac(uint32_t switch_id);
 int8_t Get_Switch_Adc(uint32_t switch_id, uint16_t *px, uint16_t *nx, uint16_t *py, uint16_t *ny);
@@ -341,6 +369,6 @@ uint8_t debug_get_pd(uint32_t which);
 uint8_t debug_set_lp(uint32_t which);
 uint8_t debug_get_switch_channel(uint8_t switch_channel);
 uint8_t debug_get_inter_exp(void);
-
+uint8_t debug_Cmd_Check_Cali(void);
 
 #endif

@@ -17,9 +17,10 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.5"; // 4 bytes
+char *fw_version = "S1.0"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
+extern osMessageQueueId_t mid_CmdProcess;
 
 extern UpgradeFlashState upgrade_status;
 
@@ -241,9 +242,6 @@ uint8_t Cmd_Set_Switch(void)
     }
     EPT("Set switch channel failed\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed\n");
-    if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-      Set_Flag(&run_status.exp, EXP_SWITCH);
-    }
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -259,9 +257,6 @@ uint8_t Cmd_Set_Switch(void)
     Reset_Switch(switch_channel);
     EPT("Set switch channel failed 2\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
-    if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
-      Set_Flag(&run_status.exp, EXP_SWITCH);
-    }
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -358,8 +353,9 @@ uint8_t Cmd_Get_IL(void)
   uint32_t i;
 
   if (which == 0) {
+    resp_buf.buf[0] = 0;
     for (i = 0; i < 64; ++i) {
-      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
+      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_TX_IL + i * 4 + 2, resp_buf.buf + 1 + i * 2, 2);
     }
     if (status != osOK) {
       EPT("Read EEPROM failed, status = %d\n", status);
@@ -367,21 +363,22 @@ uint8_t Cmd_Get_IL(void)
       return RESPOND_FAILURE;
     }
   } else if (which == 1) {
+    resp_buf.buf[0] = 1;
     for (i = 0; i < 32; ++i) {
-      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + i * 4 + 2, resp_buf.buf + i * 2, 2);
+      status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + i * 4 + 2, resp_buf.buf + 1 + i * 2, 2);
     }
     if (status != osOK) {
       EPT("Read EEPROM failed, status = %d\n", status);
       FILL_RESP_MSG(CMD_QUERY_IL, RESPOND_FAILURE, 0);
       return RESPOND_FAILURE;
     }
-    memset(resp_buf.buf + 64, 0xFF, 64);
+    memset(resp_buf.buf + 1 + 64, 0xFF, 64);
   } else {
     FILL_RESP_MSG(CMD_QUERY_IL, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
 
-  FILL_RESP_MSG(CMD_QUERY_IL, RESPOND_SUCCESS, 64 * 2);
+  FILL_RESP_MSG(CMD_QUERY_IL, RESPOND_SUCCESS, 1 + 64 * 2);
   return RESPOND_SUCCESS;
 }
 
@@ -405,14 +402,20 @@ uint8_t Cmd_Set_Tosa()
 {
   int16_t val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA));
   double power_h, power_l;
+  osStatus_t status;
 
   MsgStruct msg;
+  uint8_t msg_val;
 
   power_h = (double)val / 100;
   val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA + 2));
   power_l = (double)val / 100;
   
   if (tosa_table_count < 2) {
+    FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+  if (run_status.modulation) {
     FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -424,19 +427,39 @@ uint8_t Cmd_Set_Tosa()
     FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
+  
+  while (osMessageQueueGetCount(mid_CmdProcess)) {
+    osMessageQueueGet(mid_CmdProcess, &msg, 0U, 0U);
+  }
 
-  Clear_Lazer_Ready();
   msg.pbuf = pvPortMalloc(8);
   msg.length = 8;
   msg.type = MSG_TYPE_LAZER_POWER;
   BE32_To_Buffer((int32_t)(power_h * 100), (uint8_t*)msg.pbuf);
   BE32_To_Buffer((int32_t)(power_l * 100), (uint8_t*)msg.pbuf + 4);
   osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
-  run_status.tosa_dst_power_high = power_h;
-  run_status.tosa_dst_power_low = power_l;
+  
+  status = osMessageQueueGet(mid_CmdProcess, &msg, 0U, pdMS_TO_TICKS(800));
+  if (status != osOK) {
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "osMessageQueueGet() timeout\n");
+    FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+  msg_val = *(uint8_t*)msg.pbuf;
+  if (msg.pbuf != NULL) {
+    vPortFree(msg.pbuf);
+    msg.pbuf = NULL;
+  }
+  if (msg_val == 0) {
+    run_status.tosa_dst_power_high = power_h;
+    run_status.tosa_dst_power_low = power_l;
 
-  FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_SUCCESS, 0);
-  return RESPOND_SUCCESS;
+    FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_SUCCESS, 0);
+    return RESPOND_SUCCESS;
+  } else {
+    FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
 }
 
 uint8_t Cmd_Query_Tosa()
@@ -571,7 +594,7 @@ uint8_t Cmd_Voltage()
   }
   voltage = (double)value / 4096 * 2.5 * 51;
   value = (uint16_t)(voltage * 10 + 0.5);
-  BE16_To_Buffer(610, resp_buf.buf + 13);
+  BE16_To_Buffer(640, resp_buf.buf + 13);
   BE16_To_Buffer(value, resp_buf.buf + 15);
 
   memset(resp_buf.buf + 17, 0xFF, 8);
@@ -623,7 +646,9 @@ uint8_t Cmd_Loopback_Result(void)
 
 uint8_t Cmd_Query_Alarm(void)
 {
-  BE32_To_Buffer(run_status.exp, resp_buf.buf);
+  uint32_t alarm_val = switch_endian(run_status.exp);
+
+  BE32_To_Buffer(alarm_val, resp_buf.buf);
   FILL_RESP_MSG(CMD_QUERY_ALARM, RESPOND_SUCCESS, 4);
   return RESPOND_SUCCESS;
 }
@@ -713,7 +738,7 @@ uint8_t Cmd_Query_Alarm_History(void)
         count--;
       }
     }
-    BE32_To_Buffer(exp, resp_buf.buf + (seq - 1) * 8 + 4);
+    BE32_To_Buffer(switch_endian(exp), resp_buf.buf + (seq - 1) * 8 + 4);
   }
 
   FILL_RESP_MSG(CMD_QUERY_ALARM_HISTORY, RESPOND_SUCCESS, 80);
@@ -943,14 +968,17 @@ uint8_t Cmd_Set_Time(void)
   time.Hours = trans_buf.buf[CMD_SEQ_MSG_DATA + 3];
   time.Minutes = trans_buf.buf[CMD_SEQ_MSG_DATA + 4];
   time.Seconds = trans_buf.buf[CMD_SEQ_MSG_DATA + 5];
-  if (date.Month > 12 || date.Month == 0) {
+
+  if (date.Year > 99) {
     FILL_RESP_MSG(CMD_SET_LOG_TIME, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
-  if (date.Date > 31 || date.Date == 0) {
+
+  if (!Is_Date_Valid(date.Year + 2000, date.Month, date.Date)) {
     FILL_RESP_MSG(CMD_SET_LOG_TIME, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
+
   if (time.Hours > 23) {
     FILL_RESP_MSG(CMD_SET_LOG_TIME, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
@@ -1014,10 +1042,10 @@ uint8_t Cmd_Performance(void)
 uint8_t Cmd_Set_Threshold(void)
 {
   uint8_t alarm_id = trans_buf.buf[CMD_SEQ_MSG_DATA];
-  uint32_t val32_1, val32_2;
+  int32_t val32_1, val32_2;
   
-  val32_1 = Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 1]);
-  val32_2 = Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 5]);
+  val32_1 = (int32_t)Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 1]);
+  val32_2 = (int32_t)Buffer_To_BE32(&trans_buf.buf[CMD_SEQ_MSG_DATA + 5]);
   if (val32_2 < val32_1) {
     FILL_RESP_MSG(CMD_SET_THRESHOLD, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
@@ -1399,6 +1427,17 @@ uint8_t Cmd_For_Debug()
     }
   } else if (temp == CMD_DEBUG_INTER_EXP) {
     ret = debug_get_inter_exp();
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
+    return ret;
+  } else if (temp == CMD_DEBUG_SET_SW_ADC) {
+    u_val = Buffer_To_BE32(prdata + 8);
+    run_status.sw_adc_int = (uint16_t)u_val;
+    u_val = Buffer_To_BE32(prdata + 12);
+    run_status.sw_adc_double = (double)u_val / 1000;
+    FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 0);
+    return RESPOND_SUCCESS;
+  } else if (temp == CMD_DEBUG_CHECK_CALI) {
+    ret = debug_Cmd_Check_Cali();
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
     return ret;
   }
