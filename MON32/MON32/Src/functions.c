@@ -284,6 +284,29 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
   return status;
 }
 
+osStatus_t Reset_Tec_Dest_Temp(ThresholdStruct *table)
+{
+  osStatus_t status;
+  int32_t value;
+  double temp;
+
+  status = get_32_from_eeprom(EEPROM_ADDR, EE_TEC_DEF_TEMP, (uint32_t*)&value);
+  if (status != osOK) {
+    return status;
+  }
+  temp = (double)value / 10;
+  if (temp > 100 || temp < -50) {
+    temp = 35;
+  }
+
+  table->tec_temp_high_alarm = temp + 5;
+  table->tec_temp_high_clear = temp + 4.95;
+  table->tec_temp_low_alarm = temp - 5;
+  table->tec_temp_low_clear = temp - 4.95;
+
+  return status;
+}
+
 void Check_Cali(void)
 {
   uint16_t start = 0x1000;
@@ -2225,6 +2248,19 @@ uint8_t debug_cal_il(uint8_t num, int32_t val)
   return RESPOND_SUCCESS;
 }
 
+uint8_t debug_cal_default_temp(int32_t val)
+{
+  osStatus status;
+  uint16_t addr = EE_TEC_DEF_TEMP;
+
+  status = write_32_to_eeprom(EEPROM_ADDR, addr, (uint32_t)val);
+  if (status != osOK) {
+    return RESPOND_FAILURE;
+  }
+
+  return RESPOND_SUCCESS;
+}
+
 uint8_t debug_cal_rx_pd(uint8_t num, uint32_t adc, int32_t val)
 {
   osStatus status;
@@ -2313,6 +2349,10 @@ uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len)
     case 15: // RX PD
       len = 8 * 10;
       addr = EE_CAL_RX_PD;
+      break;
+    case 16:
+      len = 4;
+      addr = EE_TEC_DEF_TEMP;
       break;
   }
   status = RTOS_EEPROM_Read(EEPROM_ADDR, addr, resp_buf.buf, len);
@@ -2562,7 +2602,7 @@ uint8_t debug_get_inter_exp(void)
   return RESPOND_SUCCESS;
 }
 
-uint8_t debug_Cmd_Check_Cali(void)
+uint8_t debug_Check_Cali(void)
 {
   uint16_t start = 0x1000;
   uint16_t end = EE_PARA_TABLE_END;

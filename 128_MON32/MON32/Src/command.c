@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.1"; // 4 bytes
+char *fw_version = "S1.0"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -1006,6 +1006,12 @@ uint8_t Cmd_For_Debug()
     sw_num = Buffer_To_BE32(prdata + 8);
     val = (int32_t)Buffer_To_BE32(prdata + 12);
     ret = debug_cal_il(sw_num, val);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
+    return ret;
+  } else if (temp == CMD_DEBUG_CAL_DEF_TEMP) {
+    memset(resp_buf.buf, 0, 4);
+    val = (int32_t)Buffer_To_BE32(prdata + 8);
+    ret = debug_cal_default_temp(val);
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
     return ret;
   } else if (temp == CMD_DEBUG_CAL_RX_PD) {

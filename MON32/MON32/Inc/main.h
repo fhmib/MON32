@@ -80,9 +80,9 @@ extern LogFileState log_file_state;
 #define UART_PROCESS_PRIORITY     osPriorityRealtime6
 #define WATCHDOG_PRIORITY         osPriorityISR
 #define INTERRUPT_TASK_PRIORITY   osPriorityISR
-#define CMD_PROCESS_PRIORITY      osPriorityHigh
+#define CMD_PROCESS_PRIORITY      osPriorityRealtime
 #define LOG_MESSAGE_PRIORITY      osPriorityLow
-#define MONITOR_PRIORITY          osPriorityAboveNormal
+#define MONITOR_PRIORITY          osPriorityNormal
 #define LAZER_MANAGER_PRIORITY    osPriorityHigh
 
 #define WATCH_DOG_DELAY_TIME      500 // ms

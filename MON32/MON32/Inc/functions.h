@@ -67,6 +67,7 @@ typedef enum {
   EE_CAL_RX_IL            = 0x1450,
   EE_CAL_LB_IL            = 0x14D0,
   EE_CAL_RX_PD            = 0x1500,
+  EE_TEC_DEF_TEMP         = 0x1550,
   // Parameter Table end Address
   EE_PARA_TABLE_END       = 0x156F,
   // Alarm
@@ -299,6 +300,7 @@ osStatus_t Update_Up_Status(UpgradeFlashState *status);
 osStatus_t Reset_Up_Status(void);
 osStatus_t Get_Threshold_Table(ThresholdStruct *table);
 osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table);
+osStatus_t Reset_Tec_Dest_Temp(ThresholdStruct *table);
 void Check_Cali(void);
 
 osStatus_t Get_EEPROM_Alarm_Status(AlarmHistoryState *alarm);
@@ -358,6 +360,7 @@ uint8_t debug_cal_switch(uint8_t sw_num, uint32_t chan, int32_t val_x, int32_t v
 uint8_t debug_cal_tosa(uint8_t num, uint32_t tosa_dac, uint32_t tec_dac, uint32_t pd_adc, int32_t pd);
 uint8_t debug_get_tosa_val(int32_t val, uint32_t *resp_len);
 uint8_t debug_cal_il(uint8_t num, int32_t val);
+uint8_t debug_cal_default_temp(int32_t val);
 uint8_t debug_cal_rx_pd(uint8_t num, uint32_t adc, int32_t val);
 uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len);
 uint8_t debug_eeprom(uint32_t addr, uint32_t *len);
@@ -369,6 +372,6 @@ uint8_t debug_get_pd(uint32_t which);
 uint8_t debug_set_lp(uint32_t which);
 uint8_t debug_get_switch_channel(uint8_t switch_channel);
 uint8_t debug_get_inter_exp(void);
-uint8_t debug_Cmd_Check_Cali(void);
+uint8_t debug_Check_Cali(void);
 
 #endif

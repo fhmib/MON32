@@ -43,11 +43,11 @@ int main(int argc, char *argv[])
 		printf("open %s failed\n", argv[1]);
 	}
 
-	sprintf(pn, "1050200073");
+	sprintf(pn, "OSWH000110");
 	sprintf(hw, "H1.-");
 	printf("Please input software version:");
 	scanf("%s", buf);
-	sprintf(d_name, "1050200073_MON32_hw%s_fw%s.bin", hw, buf);
+	sprintf(d_name, "OSWH000110_MON32_hw%s_fw%s.bin", hw, buf);
 	sprintf(m_name, "ONET-MON32");
 
 	fp = fopen(d_name, "wb");

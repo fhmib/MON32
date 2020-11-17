@@ -162,7 +162,7 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 
   /* DataLength must be a multiple of 64 bit */
 
-  for (i = 0; i < length && (destination <= (USER_FLASH_END_ADDRESS-8)); i++)
+  for (i = 0; i < length && (destination <= (USER_FLASH_END_ADDRESS-4)); i++)
   {
     /* Device voltage range supposed to be [2.7V to 3.6V], the operation will
        be done by word */ 

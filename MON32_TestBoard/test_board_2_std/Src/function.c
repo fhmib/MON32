@@ -1082,7 +1082,7 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_adc(argc, argv);
   } else if (argc == 4 && !strcasecmp(argv[1], "tag")) {
     return debug_tag(argc, argv);
-  } else if (argc >= 5 && !strcasecmp(argv[1], "cal")) {
+  } else if (argc >= 4 && !strcasecmp(argv[1], "cal")) {
     return debug_cal(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "get_tosa_val")) {
     return debug_get_tosa_val(argc, argv);
@@ -1134,6 +1134,8 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_send_hex(argc, argv);
   } else if (argc == 3 && !strcasecmp(argv[1], "send_hex") && !strcasecmp(argv[2], "no_check")) {
     return debug_send_hex(argc, argv);
+  } else if (argc == 2 && !strcasecmp(argv[1], "check_cali")) {
+    return debug_check_cali();
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1355,6 +1357,13 @@ int8_t debug_cal(uint8_t argc, char **argv)
     BE32_To_Buffer(u_val, txBuf + 12);
     BE32_To_Buffer(val_x, txBuf + 16);
     ret = process_command(CMD_FOR_DEBUG, txBuf, 20, rBuf, &rLen);
+  } else if (argc == 4 && !strcasecmp(argv[2], "tec_temp")) {
+    sscanf(argv[3], "%lf", &d_val);
+    val_x = (int32_t)(d_val * 10);
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_CAL_DEF_TEMP, txBuf + 4);
+    BE32_To_Buffer(val_x, txBuf + 8);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 12, rBuf, &rLen);
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1428,6 +1437,9 @@ int8_t debug_dump(uint8_t argc, char **argv)
   } else if (!strcasecmp(argv[2], "pd2")) {
     which = 15;
     count = 10;
+  } else if (!strcasecmp(argv[2], "tec_temp")) {
+    which = 16;
+    count = 1;
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1521,6 +1533,10 @@ int8_t debug_dump(uint8_t argc, char **argv)
       d_val = (double)((int32_t)which) / 100;
       PRINT("%.2lf\r\n", d_val);
     }
+  } else if (which == 16) {
+    val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
+    d_val = (double)val_x / 10;
+    PRINT("TEC_TEMP: %.1lf\r\n", d_val);
   }
 
   return ret;

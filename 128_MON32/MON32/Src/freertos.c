@@ -1053,7 +1053,11 @@ void monitorTask(void *argument)
       }
     }
 
-    osDelay(pdMS_TO_TICKS(200));
+    if (run_status.modulation) {
+      osDelay(pdMS_TO_TICKS(1000));
+    } else {
+      osDelay(pdMS_TO_TICKS(300));
+    }
   }
 }
 
@@ -1138,14 +1142,19 @@ void lazerManagerTask(void *argument)
         // TODO: wait until tec ready
           u_val32 = 0;
           while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-            osDelay(10);
+            osDelay(pdMS_TO_TICKS(10));
             if (++u_val32 > 100) {
               THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
               Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
               Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
             }
           }
-          Update_Tec_Dest_Temp(&run_status.thr_table);
+          if (u_val32 > 100) {
+            Reset_Tec_Dest_Temp(&run_status.thr_table);
+          } else {
+            osDelay(pdMS_TO_TICKS(20));
+            Update_Tec_Dest_Temp(&run_status.thr_table);
+          }
         }
 
         // Set tosa

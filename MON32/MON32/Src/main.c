@@ -472,6 +472,7 @@ void MON32_Init_Dev(void)
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_RESET);
   Init_Run_Status();
   Get_Threshold_Table(&run_status.thr_table);
+  Reset_Tec_Dest_Temp(&run_status.thr_table);
 
   run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
   run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);

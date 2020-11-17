@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "MON32_testboard_1.0.4"
+#define VER "MON32_testboard_1.0.5"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 

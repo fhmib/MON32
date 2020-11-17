@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S1.0"; // 4 bytes
+char *fw_version = "S1.1"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -439,7 +439,7 @@ uint8_t Cmd_Set_Tosa()
   BE32_To_Buffer((int32_t)(power_l * 100), (uint8_t*)msg.pbuf + 4);
   osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
   
-  status = osMessageQueueGet(mid_CmdProcess, &msg, 0U, pdMS_TO_TICKS(800));
+  status = osMessageQueueGet(mid_CmdProcess, &msg, 0U, pdMS_TO_TICKS(800) / 2);
   if (status != osOK) {
     THROW_LOG(MSG_TYPE_ERROR_LOG, "osMessageQueueGet() timeout\n");
     FILL_RESP_MSG(CMD_SET_TOSA, RESPOND_FAILURE, 0);
@@ -1336,6 +1336,12 @@ uint8_t Cmd_For_Debug()
     ret = debug_cal_il(sw_num, val);
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
     return ret;
+  } else if (temp == CMD_DEBUG_CAL_DEF_TEMP) {
+    memset(resp_buf.buf, 0, 4);
+    val = (int32_t)Buffer_To_BE32(prdata + 8);
+    ret = debug_cal_default_temp(val);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
+    return ret;
   } else if (temp == CMD_DEBUG_CAL_RX_PD) {
     memset(resp_buf.buf, 0, 4);
     sw_num = Buffer_To_BE32(prdata + 8);
@@ -1437,7 +1443,7 @@ uint8_t Cmd_For_Debug()
     FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 0);
     return RESPOND_SUCCESS;
   } else if (temp == CMD_DEBUG_CHECK_CALI) {
-    ret = debug_Cmd_Check_Cali();
+    ret = debug_Check_Cali();
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
     return ret;
   }

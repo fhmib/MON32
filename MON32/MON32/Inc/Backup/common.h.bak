@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #define MY_MIN(a,b)                ((a)<(b)?(a):(b))
+#define MY_MAX(a,b)                ((a)>(b)?(a):(b))
 
 #define I2C_WAIT_TIMEOUT          500   //ms
 
@@ -30,7 +31,9 @@
 #define PRINT(format, ...)	do{\
                     } while(0)
 #endif
-#define THROW_LOG(format, ...) do {\
+#define THROW_LOG(type, format, ...) do {\
+                      sprintf((char*)debug_buf, format, ##__VA_ARGS__);\
+                      Throw_Log(type, debug_buf, strlen((char*)debug_buf));\
                     } while(0)
 
 extern uint8_t debug_buf[];
@@ -44,16 +47,18 @@ typedef enum {
 uint32_t switch_endian(uint32_t i);
 uint16_t switch_endian_16(uint16_t i);
 uint32_t my_abs(int32_t val);
+uint8_t Is_Date_Valid(uint8_t year, uint8_t month, uint8_t date);
 void BE32_To_Buffer(uint32_t data, uint8_t *pbuf);
 uint32_t Buffer_To_BE32(uint8_t *pbuf);
 void BE16_To_Buffer(uint16_t data, uint8_t *pbuf);
 uint16_t Buffer_To_BE16(uint8_t *pbuf);
-uint8_t Is_Value_Approximate(int32_t src, int32_t dst, double factor);
+uint8_t Is_Value_Approximate(uint32_t src, uint32_t dst);
 
 void PRINT_HEX(char *head, uint8_t *pdata, uint32_t len);
 
 uint8_t Cal_Check(uint8_t *pdata, uint32_t len);
 uint32_t Cal_CRC32(uint8_t* packet, uint32_t length);
+uint32_t Cal_CRC32_2(uint8_t* packet, uint32_t length, uint32_t CRC32);
 
 osStatus_t get_8_from_eeprom(int16_t bus_addr, uint16_t addr, uint8_t *pval);
 osStatus_t write_8_to_eeprom(int16_t bus_addr, uint16_t addr, uint8_t data);

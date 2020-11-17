@@ -85,7 +85,7 @@ enum {
 #define APPLICATION_2_SECTOR      FLASH_SECTOR_7
 #define RESERVE_SECTOR            FLASH_SECTOR_8
 /* Notable Flash addresses */
-#define USER_FLASH_END_ADDRESS        0x08100000
+#define USER_FLASH_END_ADDRESS        0x08200000
 
 
 /* Exported macro ------------------------------------------------------------*/
