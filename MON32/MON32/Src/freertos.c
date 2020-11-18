@@ -30,6 +30,7 @@
 #include "iwdg.h"
 #include "flash_if.h"
 #include "functions.h"
+#include "tim.h"
 
 /* USER CODE END Includes */
 
@@ -806,12 +807,15 @@ void monitorTask(void *argument)
 
     // PRO_Dis signal
     if (HAL_GPIO_ReadPin(PRO_DIS_N_GPIO_Port, PRO_DIS_N_Pin) == GPIO_PIN_RESET) {
-      if (!run_status.tosa_enable && allow_tosa) {
+      if (!run_status.tosa_enable && allow_tosa && !enable_tosa_failed) {
+        run_status.tosa_enable = 1;
         msg.type = MSG_TYPE_LAZER_ENABLE;
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       }
     } else {
+      enable_tosa_failed = 0;
       if (run_status.tosa_enable) {
+        run_status.tosa_enable = 0;
         msg.type = MSG_TYPE_LAZER_DISABLE;
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       }
@@ -1065,11 +1069,10 @@ void lazerManagerTask(void *argument)
 {
   osStatus_t status;
   uint8_t buf[2];
-  uint8_t i, ret;
+  uint8_t ret;
   MsgStruct msg;
-  double power_h, power_l, power_dst, power_tap;
+  double power_cur, power_sub, power_dst;
   uint32_t u_val32;
-  uint8_t print_control = 0, cmdPro_control = 0;
 
   osDelay(pdMS_TO_TICKS(500));
 
@@ -1079,6 +1082,7 @@ void lazerManagerTask(void *argument)
     if (status != osOK)
       continue;
 
+#if 0
     if (msg.type == MSG_TYPE_LAZER_ENABLE) {
       if ((ret = Enable_Tosa()) != 0) {
         Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
@@ -1282,6 +1286,220 @@ void lazerManagerTask(void *argument)
           }
         }
       }
+#endif
+    if (msg.type == MSG_TYPE_LAZER_ENABLE) {
+      if (run_status.modulation) {
+        status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
+        if (run_status.power_mode) {
+          DAC5541_Write(run_status.tosa_high.tosa_dac);
+        } else {
+          DAC5541_Write(run_status.tosa_low.tosa_dac);
+        }
+      } else {
+        status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
+        DAC5541_Write(run_status.tosa_high.tosa_dac);
+      }
+
+      if ((ret = Enable_Tosa()) != 0) {
+        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Enable Tosa failed, ret = %u\n", ret);
+        enable_tosa_failed = 1;
+        continue;
+      }
+      osDelay(pdMS_TO_TICKS(1));
+
+      u_val32 = 0;
+      while (!Is_Tec_Lock()) {
+        osDelay(5);
+        if (++u_val32 > 50) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          break;
+        }
+      }
+
+      if (!run_status.modulation) {
+        if (Cali_Power(run_status.tosa_dst_power_high)) {
+          allow_tosa = 0;
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
+          Disable_Tosa();
+          continue;
+        }
+      }
+      
+      Set_Lazer_Ready();
+
+      if (Is_Tec_Lock()) {
+        Update_Tec_Dest_Temp(&run_status.thr_table);
+      }
+      run_status.allow_monitor = 1;
+      Set_Lazer_Ready();
+    } else if (msg.type == MSG_TYPE_LAZER_DISABLE) {
+      run_status.allow_monitor = 0;
+      Clear_Lazer_Ready();
+
+      Disable_Tosa();
+    } else if (msg.type == MSG_TYPE_LAZER_POWER) {
+      msg.type = MSG_TYPE_CMD_PROCESS;
+      msg.pbuf = pvPortMalloc(1);
+      msg.length = 1;
+
+      run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+      run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+
+      if (run_status.tosa_enable) {
+        run_status.allow_monitor = 0;
+        Clear_Lazer_Ready();
+        
+        if (run_status.modulation) {
+          status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
+          if (run_status.power_mode) {
+            DAC5541_Write(run_status.tosa_high.tosa_dac);
+          } else {
+            DAC5541_Write(run_status.tosa_low.tosa_dac);
+          }
+          osDelay(pdMS_TO_TICKS(1));
+
+          u_val32 = 0;
+          while (!Is_Tec_Lock()) {
+            osDelay(5);
+            if (++u_val32 > 50) {
+              THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+              break;
+            }
+          }
+        } else {
+          status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
+          DAC5541_Write(run_status.tosa_high.tosa_dac);
+          osDelay(1);
+
+          u_val32 = 0;
+          while (!Is_Tec_Lock()) {
+            osDelay(5);
+            if (++u_val32 > 50) {
+              THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+              break;
+            }
+          }
+
+          if (Cali_Power(run_status.tosa_dst_power_high)) {
+            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
+            allow_tosa = 0;
+            run_status.tosa_enable = 0;
+            Disable_Tosa();
+            // return failure
+            *(uint8_t*)msg.pbuf = 1;
+            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+            continue;
+          }
+        }
+
+        Set_Lazer_Ready();
+
+        // return success
+        *(uint8_t*)msg.pbuf = 0;
+        osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+
+        if (Is_Tec_Lock()) {
+          Update_Tec_Dest_Temp(&run_status.thr_table);
+        }
+        run_status.allow_monitor = 1;
+      } else {
+        // return success
+        //*(uint8_t*)msg.pbuf = 0;
+        //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+      }
+    } else if (msg.type == MSG_TYPE_MODULATION_ON) {
+      //msg.type = MSG_TYPE_CMD_PROCESS;
+      //msg.pbuf = pvPortMalloc(1);
+      //msg.length = 1;
+
+      if (run_status.tosa_enable) {
+        run_status.allow_monitor = 0;
+        Clear_Lazer_Ready();
+        
+        status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
+        u_val32 = 0;
+        while (!Is_Tec_Lock()) {
+          osDelay(5);
+          if (++u_val32 > 50) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+            break;
+          }
+        }
+
+        Set_Lazer_Ready();
+
+        run_status.modulation = 1;
+        HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
+        HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
+
+        if (Is_Tec_Lock()) {
+          Update_Tec_Dest_Temp(&run_status.thr_table);
+        }
+        run_status.allow_monitor = 1;
+      } else {
+        run_status.modulation = 1;
+        HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
+        HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
+      }
+      
+      //*(uint8_t*)msg.pbuf = 0;
+      //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+
+    } else if (msg.type == MSG_TYPE_MODULATION_OFF) {
+      //msg.type = MSG_TYPE_CMD_PROCESS;
+      //msg.pbuf = pvPortMalloc(1);
+      //msg.length = 1;
+
+      HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_1);
+      HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_3);
+      
+      run_status.power_mode = 1;
+      
+      if (run_status.tosa_enable) {
+        run_status.allow_monitor = 0;
+        Clear_Lazer_Ready();
+        
+        status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
+        DAC5541_Write(run_status.tosa_high.tosa_dac);
+        osDelay(pdMS_TO_TICKS(1));
+
+        u_val32 = 0;
+        while (!Is_Tec_Lock()) {
+          osDelay(5);
+          if (++u_val32 > 50) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+            break;
+          }
+        }
+
+        if (Cali_Power(run_status.tosa_dst_power_high)) {
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
+          allow_tosa = 0;
+          run_status.tosa_enable = 0;
+          Disable_Tosa();
+          // return failure
+          //*(uint8_t*)msg.pbuf = 1;
+          //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+          continue;
+        }
+
+        Set_Lazer_Ready();
+
+        if (Is_Tec_Lock()) {
+          Update_Tec_Dest_Temp(&run_status.thr_table);
+        }
+        run_status.allow_monitor = 1;
+      }
+      
+      run_status.modulation = 0;
+      //*(uint8_t*)msg.pbuf = 0;
+      //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
     } else if (msg.type == MSG_TYPE_SELF_TEST) {
       if (Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
         Clear_Flag(&run_status.exp, EXP_SELFCHECK);
@@ -1295,18 +1513,20 @@ void lazerManagerTask(void *argument)
   
       run_status.osc_status = OSC_ONGOING;
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+      msg.pbuf = NULL;
       osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
     } else if (msg.type == MSG_TYPE_SELF_TEST_STEP_2) {
+      msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
+      msg.pbuf = NULL;
       if (run_status.osc_status == OSC_FAILURE) {
         if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
           Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
-        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
         osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
 
-      if ((ret = Get_Tap_Power(&power_h)) != 0) {
+      if ((ret = Get_Tap_Power(&power_cur)) != 0) {
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed because get tap-pd failed.\n");
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u when self_check\n", ret);
         Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
@@ -1314,15 +1534,14 @@ void lazerManagerTask(void *argument)
           Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
         run_status.osc_status = OSC_FAILURE;
-        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
         osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
-      power_l = run_status.tosa_dst_power_high - power_h;
+      power_sub = run_status.tosa_dst_power_high - power_cur;
       // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Tap power = %lf, dest power is %lf\r\n", power_h, run_status.tosa_dst_power_high);
-      if (power_l > 2 || power_l < -2) {
+      if (power_sub > 2 || power_sub < -2) {
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed.\n");
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf, destination is %lf\n", power_h, run_status.tosa_dst_power_high);
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap power = %lf, destination is %lf\n", power_cur, run_status.tosa_dst_power_high);
         if (!Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
           Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
@@ -1330,12 +1549,11 @@ void lazerManagerTask(void *argument)
           Set_Flag(&run_status.exp, EXP_LAZER_POWER);
         }
         run_status.osc_status = OSC_FAILURE;
-        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
         osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
 
-      if ((ret = Get_Rx_Power(&power_h)) != 0) {
+      if ((ret = Get_Rx_Power(&power_cur)) != 0) {
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed because get rx-pd failed.\n");
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Rx_Power error code = %u when self_check\n", ret);
         Set_Flag(&run_status.internal_exp, INT_EXP_RX_PD);
@@ -1343,19 +1561,18 @@ void lazerManagerTask(void *argument)
           Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
         run_status.osc_status = OSC_FAILURE;
-        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
         osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
       status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_LB_IL + 2, buf, 2);
       // power_dst is loopback insertion loss vale
       power_dst = (double)(int16_t)Buffer_To_BE16(buf) / 100;
-      power_l = run_status.tosa_dst_power_high - (power_h + power_dst);
+      power_sub = run_status.tosa_dst_power_high - (power_cur + power_dst);
       // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check Rx power = %lf, IL = %lf, dest power is %lf, \r\n", power_h, power_dst, run_status.tosa_dst_power_high);
-      if (power_l > 3 || power_l < -3) {
+      if (power_sub > 3 || power_sub < -3) {
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Self-check failed.\n");
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Rx power = %lf, IL = %lf, destination is %lf\n", power_h, power_dst, run_status.tosa_dst_power_high);
-        if (power_l > 60 || power_l < -60) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Rx power = %lf, IL = %lf, destination is %lf\n", power_cur, power_dst, run_status.tosa_dst_power_high);
+        if (power_sub > 60 || power_sub < -60) {
           if (!Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
             Set_Flag(&run_status.exp, EXP_SWITCH);
           }
@@ -1368,7 +1585,6 @@ void lazerManagerTask(void *argument)
           Set_Flag(&run_status.exp, EXP_SELFCHECK);
         }
         run_status.osc_status = OSC_FAILURE;
-        msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
         osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
         continue;
       }
@@ -1377,7 +1593,6 @@ void lazerManagerTask(void *argument)
         Clear_Flag(&run_status.exp, EXP_SELFCHECK);
       }
       run_status.osc_status = OSC_SUCCESS;
-      msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
       osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
     }
   }
