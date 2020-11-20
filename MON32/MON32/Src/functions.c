@@ -291,7 +291,7 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
     osDelay(10);
   }
   
-  THROW_LOG(MSG_TYPE_NORMAL_LOG, "Get Temp times = %u, i = %u, temp = %.3lf\n", times, i, temp);
+  // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Get Temp times = %u, i = %u, temp = %.1lf\n", times, i, temp);
 
   table->tec_temp_high_alarm = temp + 5;
   table->tec_temp_high_clear = temp + 4.95;
@@ -1215,19 +1215,19 @@ TosaCalData Cal_Tosa_Data(TosaCalData tosa_node_1, TosaCalData tosa_node_2, doub
   y1 = tosa_node_1.tap_adc; y2 = tosa_node_2.tap_adc;
   x = tosa_data.tap_power;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tap_adc = (uint16_t)(y + 0.5);
+  tosa_data.tap_adc = (uint32_t)(y + 0.5);
 
   x1 = (double)tosa_node_1.tap_adc; x2 = (double)tosa_node_2.tap_adc;
   y1 = (double)tosa_node_1.tosa_dac; y2 = (double)tosa_node_2.tosa_dac;
   x = tosa_data.tap_adc;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tosa_dac = (uint16_t)(y + 0.5);
+  tosa_data.tosa_dac = (uint32_t)(y + 0.5);
 
   x1 = (double)tosa_node_1.tosa_dac; x2 = (double)tosa_node_2.tosa_dac;
   y1 = (double)tosa_node_1.tec_dac; y2 = (double)tosa_node_2.tec_dac;
   x = tosa_data.tosa_dac;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tec_dac = (uint16_t)(y + 0.5);
+  tosa_data.tec_dac = (uint32_t)(y + 0.5);
   
   return tosa_data;
 }
@@ -1274,16 +1274,13 @@ uint8_t Get_Tap_Power(double *cur_power)
     }
     
     if (times > 5) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Get Tap PD Power exception\n");
       break;
     }
     osDelay(pdMS_TO_TICKS(3));
   }
   
-  if (times > 3) {
-    return 2;
-  } else {
-    *cur_power = pre_power;
-  }
+  *cur_power = pre_power;
 #if 0
   THROW_LOG(MSG_TYPE_NORMAL_LOG, "Power Data: %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf ", \
             power_arr_for_test[0], power_arr_for_test[1], power_arr_for_test[2], power_arr_for_test[3], power_arr_for_test[4], \
@@ -1320,7 +1317,7 @@ uint8_t Is_Tec_Lock(void)
 uint8_t Cali_Power(double power_dst)
 {
   uint8_t ret;
-  uint32_t times = 0, u_val32;
+  uint32_t times = 0;
   double power_tap, power_tmp;
 
   do {
@@ -1330,18 +1327,27 @@ uint8_t Cali_Power(double power_dst)
       return 1;
     }
     if (power_tap < -30) {
-      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap Power = %lf is not normal!\n", power_tap);
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap Power = %.2lf is not normal!\n", power_tap);
       return 2;
     }
-    if (power_tap > power_dst + 0.3 || power_tap < power_dst - 0.3) {
-      THROW_LOG(MSG_TYPE_ERROR_LOG, "Tap power = %lf, destination is %lf\n", power_tap, power_dst);
+    if (power_tap > power_dst + 0.5 || power_tap < power_dst - 0.5) {
+      ++times;
+      if (times > 10) {
+        if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+          Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module cannot reach destination power after self-control process\n");
+        return 0;
+      }
+
 
       power_tmp = power_dst - (power_tap - power_dst);
-      THROW_LOG(MSG_TYPE_ERROR_LOG, "Research power data = %lf. times = %u\n", power_tmp, ++times);
       run_status.tosa_high = Get_Tosa_Data(power_tmp);
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "Tap power = %.2lf, destination is %.2lf, times = %u, research power is %.2lf(dac:%u)\n",\
+                    power_tap, power_dst, times, power_tmp, run_status.tosa_high.tosa_dac);
 
       if (run_status.tosa_high.tosa_dac > 0x10000 * 0.95) {
-        THROW_LOG(MSG_TYPE_ERROR_LOG, "Dac value exceeds limitation %#X\n", run_status.tosa_high.tosa_dac);
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Dac value exceeds limitation %u\n", run_status.tosa_high.tosa_dac);
         if (power_tap >= 0) {
           if (power_tap > power_dst + 2 || power_tap < power_dst - 2) {
             if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
@@ -1360,6 +1366,7 @@ uint8_t Cali_Power(double power_dst)
           // Recover power actual value
           run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
           run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Lazer is aging\n");
 
           if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
             Set_Flag(&run_status.exp, EXP_LAZER_AGING);
@@ -1370,16 +1377,6 @@ uint8_t Cali_Power(double power_dst)
         RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
         DAC5541_Write(run_status.tosa_high.tosa_dac);
         osDelay(pdMS_TO_TICKS(1));
-
-        u_val32 = 0;
-        while (!Is_Tec_Lock()) {
-          osDelay(5);
-          if (++u_val32 > 50) {
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error when cali power\n");
-            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-            return 0;
-          }
-        }
       }
     } else {
       if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {

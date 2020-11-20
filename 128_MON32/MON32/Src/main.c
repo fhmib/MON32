@@ -64,7 +64,8 @@ double tosa_power_high_max_thr = 0;
 double tosa_power_low_min_thr = 0;
 
 uint8_t device_busy = 1;
-uint8_t allow_tosa = 1;
+uint8_t allow_tosa = 1; // Indicates allow tosa enable or not. Set by reset.
+uint8_t enable_tosa_failed = 0; // Indicates endable tosa failed. Clear when pro_dis_n is 0.
 
 const uint32_t error_file_flash_addr[] =  {  0x08100000, 0x08104000, 0x08108000, 0x0810C000, 0x08110000, 0x08120000,\
                                        0x08140000  };
@@ -76,6 +77,8 @@ const uint32_t normal_file_flash_end = 0x081BFFFF;
 const uint8_t normal_file_flash_count = sizeof(normal_file_flash_addr) / sizeof (normal_file_flash_addr[0]);
 
 LogFileState log_file_state;
+
+//double power_arr_for_test[10];
 
 RunTimeStatus run_status __attribute__((at(0x2002FC00)));
 /* USER CODE END PV */
@@ -525,9 +528,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
       // Rising Edge
       DAC5541_Write(run_status.tosa_high.tosa_dac);
+      run_status.power_mode = 1;
     } else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {
       // Failing Edge
       DAC5541_Write(run_status.tosa_low.tosa_dac);
+      run_status.power_mode = 0;
     }
   }
 }

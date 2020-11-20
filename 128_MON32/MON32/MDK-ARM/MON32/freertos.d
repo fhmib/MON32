@@ -59,3 +59,4 @@ mon32\freertos.o: ../Inc/functions.h
 mon32\freertos.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 mon32\freertos.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 mon32\freertos.o: ../Inc/iwdg.h
+mon32\freertos.o: ../Inc/tim.h

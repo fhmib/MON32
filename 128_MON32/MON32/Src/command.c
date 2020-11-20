@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S1.0"; // 4 bytes
+char *fw_version = "S1.1"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -552,41 +552,63 @@ uint8_t Cmd_Set_Modulation(void)
 {
   int8_t val = trans_buf.buf[CMD_SEQ_MSG_DATA];
   MsgStruct msg;
-  
+  //osStatus_t status;
+  //uint8_t msg_val;
+#if 0
+  while (osMessageQueueGetCount(mid_CmdProcess)) {
+    osMessageQueueGet(mid_CmdProcess, &msg, 0U, 0U);
+    if (msg.pbuf != NULL) {
+      vPortFree(msg.pbuf);
+    }
+  }
+#endif
   if (val == 0) {
     if (run_status.modulation) {
-      Clear_Lazer_Ready();
-      HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_1);
-      HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_3);
-      run_status.modulation = 0;
-
-      msg.pbuf = pvPortMalloc(8);
-      msg.length = 8;
-      msg.type = MSG_TYPE_LAZER_POWER;
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf);
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf + 4);
+      msg.pbuf = NULL;
+      msg.length = 0;
+      msg.type = MSG_TYPE_MODULATION_OFF;
       osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
+    } else {
+      FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
     }
   } else if (val == 1) {
     if (!run_status.modulation) {
-      Clear_Lazer_Ready();
-      HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
-      HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
-      run_status.modulation = 1;
-
-      msg.pbuf = pvPortMalloc(8);
-      msg.length = 8;
-      msg.type = MSG_TYPE_LAZER_POWER;
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf);
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf + 4);
+      msg.pbuf = NULL;
+      msg.length = 0;
+      msg.type = MSG_TYPE_MODULATION_ON;
       osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
+    } else {
+      FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
     }
   } else {
     FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_INVALID_PARA, 0);
     return RESPOND_INVALID_PARA;
   }
+#if 0
+  status = osMessageQueueGet(mid_CmdProcess, &msg, 0U, pdMS_TO_TICKS(800) / 2);
+  if (status != osOK) {
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "osMessageQueueGet() timeout\n");
+    FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+  msg_val = *(uint8_t*)msg.pbuf;
+  if (msg.pbuf != NULL) {
+    vPortFree(msg.pbuf);
+    msg.pbuf = NULL;
+  }
+  if (msg_val == 0) {
+    FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_SUCCESS, 0);
+    return RESPOND_SUCCESS;
+  } else {
+    FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+#else
   FILL_RESP_MSG(CMD_SET_MODULATION, RESPOND_SUCCESS, 0);
   return RESPOND_SUCCESS;
+#endif
 }
 
 uint8_t Cmd_Query_Modulation(void)

@@ -16,12 +16,13 @@ typedef enum {
   MSG_TYPE_SWITCH1_ISR,
   MSG_TYPE_SWITCH2_ISR,
   MSG_TYPE_SELF_CHECK_SWITCH,
-  MSG_TYPE_LAZER_ENABLE,
-  MSG_TYPE_LAZER_DISABLE,
-  MSG_TYPE_LAZER_POWER,
   MSG_TYPE_SELF_TEST,
   MSG_TYPE_SELF_TEST_STEP_2,
   MSG_TYPE_CMD_PROCESS,
+  MSG_TYPE_LAZER_ENABLE,
+  MSG_TYPE_LAZER_DISABLE,
+  MSG_TYPE_MODULATION_ON,
+  MSG_TYPE_MODULATION_OFF,
 } MsgType;
 
 // For Log File
@@ -188,7 +189,7 @@ typedef enum {
   INT_EXP_LOG_PROGRAM     =  3,
   INT_EXP_INIT            =  4,
   INT_EXP_OS_ERR          =  5,
-  INT_EXP_TMPGD           =  6,
+  // INT_EXP_TMPGD           =  6,
   INT_EXP_UP_ALARM        =  7,
   INT_EXP_LOG_TASK        =  8,
   INT_EXP_TAP_PD          =  9,
@@ -200,9 +201,9 @@ typedef enum {
 
 #define TOSA_TABLE_COUNT  10
 typedef struct {
-  uint16_t tosa_dac;
-  uint16_t tec_dac;
-  uint16_t tap_adc;
+  uint32_t tosa_dac;
+  uint32_t tec_dac;
+  uint32_t tap_adc;
   double tap_power;
 } TosaCalData;
 
@@ -275,6 +276,7 @@ typedef struct {
   double tosa_dst_power_high;
   ThresholdStruct thr_table;
   uint8_t allow_monitor;
+  uint8_t power_mode;
   uint16_t sw_adc_int;
   double sw_adc_double;
 } RunTimeStatus;
@@ -341,6 +343,8 @@ TosaCalData Get_Tosa_Data(double power);
 TosaCalData Cal_Tosa_Data(TosaCalData x1, TosaCalData x2, double power);
 uint8_t Get_Tap_Power(double *cur_power);
 uint8_t Get_Rx_Power(double *cur_power);
+uint8_t Is_Tec_Lock(void);
+uint8_t Cali_Power(double power_dst);
 
 uint8_t cal_tap_pd_by_power(uint16_t *adc, double power);
 uint8_t get_tap_pd_power(uint16_t *adc, double *power);

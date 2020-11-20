@@ -178,7 +178,6 @@ static uint32_t CRC32_TABLE[] = {
 
 uint32_t Cal_CRC32(uint8_t* packet, uint32_t length)
 {
-
   uint32_t CRC32 = 0xFFFFFFFF;
   for (uint32_t i = 0; i < length; i++) {
     CRC32 = (CRC32_TABLE[((CRC32) ^ (packet[i])) & 0xff] ^ ((CRC32) >> 8));

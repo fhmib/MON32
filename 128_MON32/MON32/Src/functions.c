@@ -267,14 +267,31 @@ osStatus_t Get_Threshold_Table(ThresholdStruct *table)
 osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
 {
   osStatus_t status;
-  uint16_t value;
-  double temp;
+  uint16_t value, i = 0, times = 0;
+  double temp, temp_first;
 
-  status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &value);
-  if (status != osOK) {
-    return status;
+  while (times++ < 30 && i < 5) {
+    status = RTOS_ADC7953_SPI5_Read(TEC_ADC_TEC_TEMP_CHANNEL, &value);
+    if (status != osOK) {
+      return status;
+    }
+    temp = Cal_Tosa_Temp(value);
+
+    if (i == 0) {
+      temp_first = temp;
+      i++;
+    } else {
+      if (temp >= temp_first - 0.2 && temp <= temp_first + 0.2) {
+        i++;
+      } else {
+        i = 0;
+      }
+    }
+
+    osDelay(10);
   }
-  temp = Cal_Tosa_Temp(value);
+  
+  // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Get Temp times = %u, i = %u, temp = %.1lf\n", times, i, temp);
 
   table->tec_temp_high_alarm = temp + 5;
   table->tec_temp_high_clear = temp + 4.95;
@@ -979,20 +996,21 @@ void Init_Run_Status(void)
   run_status.tx_switch_channel = 0xFF;
   run_status.rx_switch_channel = 0xFF;
   run_status.exp = 0;
-  //run_status.tosa_high = 30000;
-  //run_status.tosa_low = 0;
-  run_status.modulation = 0;
   if (HAL_GPIO_ReadPin(SW1_BLOCK_GPIO_Port, SW1_BLOCK_Pin) == GPIO_PIN_RESET) {
     run_status.tx_block = 1;
   } else {
     run_status.tx_block = 0;
   }
+
+  run_status.modulation = 0;
   run_status.tosa_enable = 0;
   run_status.lazer_ready = 0;
-  run_status.osc_status = OSC_FAILURE;
   run_status.tosa_dst_power_high = 0;
   run_status.tosa_dst_power_low = -4;
   run_status.allow_monitor = 0;
+  run_status.power_mode = 1;
+
+  run_status.osc_status = OSC_FAILURE;
   run_status.sw_adc_int = 200;
   run_status.sw_adc_double = 0.05;
 }
@@ -1077,7 +1095,6 @@ double Cal_Tosa_Temp(uint16_t adc)
 uint8_t Enable_Tosa()
 {
   osStatus_t status;
-  uint32_t i = 0;
 
   if (tosa_table_count == 0) {
     Set_Flag(&run_status.internal_exp, INT_EXP_TOSA_DATA);
@@ -1087,14 +1104,6 @@ uint8_t Enable_Tosa()
   status = RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 4095, DAC128S085_MODE_NORMAL);
   if (status != osOK) {
     return 1;
-  }
-  while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-    osDelay(10);
-    if (++i > 100) {
-      THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-      Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
-      return 2;
-    }
   }
   status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 4095, DAC128S085_MODE_NORMAL);
   if (status != osOK) {
@@ -1206,19 +1215,19 @@ TosaCalData Cal_Tosa_Data(TosaCalData tosa_node_1, TosaCalData tosa_node_2, doub
   y1 = tosa_node_1.tap_adc; y2 = tosa_node_2.tap_adc;
   x = tosa_data.tap_power;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tap_adc = (uint16_t)(y + 0.5);
+  tosa_data.tap_adc = (uint32_t)(y + 0.5);
 
   x1 = (double)tosa_node_1.tap_adc; x2 = (double)tosa_node_2.tap_adc;
   y1 = (double)tosa_node_1.tosa_dac; y2 = (double)tosa_node_2.tosa_dac;
   x = tosa_data.tap_adc;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tosa_dac = (uint16_t)(y + 0.5);
+  tosa_data.tosa_dac = (uint32_t)(y + 0.5);
 
   x1 = (double)tosa_node_1.tosa_dac; x2 = (double)tosa_node_2.tosa_dac;
   y1 = (double)tosa_node_1.tec_dac; y2 = (double)tosa_node_2.tec_dac;
   x = tosa_data.tosa_dac;
   y = (x - x1) * (y2 - y1) / (x2 - x1) + y1;
-  tosa_data.tec_dac = (uint16_t)(y + 0.5);
+  tosa_data.tec_dac = (uint32_t)(y + 0.5);
   
   return tosa_data;
 }
@@ -1229,6 +1238,19 @@ uint8_t Get_Tap_Power(double *cur_power)
   uint16_t tap_adc;
   double tap_power, pre_power, first_power;
 
+#if 0
+  while (i < 10) {
+    if (get_tap_pd_power(&tap_adc, &tap_power)) {
+      return 1;
+    }
+    power_arr_for_test[i] = tap_power;
+    ++i;
+    osDelay(pdMS_TO_TICKS(15));
+  }
+
+  i = 0;
+#endif
+  // osDelay(100);
   while (1) {
     if (get_tap_pd_power(&tap_adc, &tap_power)) {
       return 1;
@@ -1238,7 +1260,7 @@ uint8_t Get_Tap_Power(double *cur_power)
       pre_power = tap_power;
       first_power = pre_power;
       i++;
-    } else if (i < 10) {
+    } else if (i < 5) {
       if ((tap_power <= pre_power + 0.3 && tap_power >= pre_power - 0.3) && \
         (tap_power <= first_power + 0.5 && tap_power >= first_power - 0.5)) {
         i++;
@@ -1251,18 +1273,19 @@ uint8_t Get_Tap_Power(double *cur_power)
       break;
     }
     
-    if (times > 3) {
+    if (times > 5) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Get Tap PD Power exception\n");
       break;
     }
-    osDelay(pdMS_TO_TICKS(15));
+    osDelay(pdMS_TO_TICKS(3));
   }
   
-  if (times > 3) {
-    return 2;
-  } else {
-    *cur_power = pre_power;
-  }
-  
+  *cur_power = pre_power;
+#if 0
+  THROW_LOG(MSG_TYPE_NORMAL_LOG, "Power Data: %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf ", \
+            power_arr_for_test[0], power_arr_for_test[1], power_arr_for_test[2], power_arr_for_test[3], power_arr_for_test[4], \
+            power_arr_for_test[5], power_arr_for_test[6], power_arr_for_test[7], power_arr_for_test[8], power_arr_for_test[9]);
+#endif
   return 0;
 }
 
@@ -1281,6 +1304,90 @@ uint8_t Get_Rx_Power(double *cur_power)
   }
   *cur_power = sum / i;
   return 0;
+}
+
+uint8_t Is_Tec_Lock(void)
+{
+  if (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET)
+    return 0;
+  
+  return 1;
+}
+
+uint8_t Cali_Power(double power_dst)
+{
+  uint8_t ret;
+  uint32_t times = 0;
+  double power_tap, power_tmp;
+
+  do {
+    if ((ret = Get_Tap_Power(&power_tap)) != 0) {
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u\n", ret);
+      Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
+      return 1;
+    }
+    if (power_tap < -30) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap Power = %.2lf is not normal!\n", power_tap);
+      return 2;
+    }
+    if (power_tap > power_dst + 0.5 || power_tap < power_dst - 0.5) {
+      ++times;
+      if (times > 10) {
+        if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+          Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+        }
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module cannot reach destination power after self-control process\n");
+        return 0;
+      }
+
+
+      power_tmp = power_dst - (power_tap - power_dst);
+      run_status.tosa_high = Get_Tosa_Data(power_tmp);
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "Tap power = %.2lf, destination is %.2lf, times = %u, research power is %.2lf(dac:%u)\n",\
+                    power_tap, power_dst, times, power_tmp, run_status.tosa_high.tosa_dac);
+
+      if (run_status.tosa_high.tosa_dac > 0x10000 * 0.95) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Dac value exceeds limitation %u\n", run_status.tosa_high.tosa_dac);
+        if (power_tap >= 0) {
+          if (power_tap > power_dst + 2 || power_tap < power_dst - 2) {
+            if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+              Set_Flag(&run_status.exp, EXP_LAZER_POWER);
+            }
+          } else {
+            if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+              Clear_Flag(&run_status.exp, EXP_LAZER_POWER);
+            }
+            if (Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
+              Clear_Flag(&run_status.exp, EXP_LAZER_AGING);
+            }
+          }
+          return 0;
+        } else {
+          // Recover power actual value
+          run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+          run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Lazer is aging\n");
+
+          if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
+            Set_Flag(&run_status.exp, EXP_LAZER_AGING);
+          }
+          return 3;
+        }
+      } else {
+        RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
+        DAC5541_Write(run_status.tosa_high.tosa_dac);
+        osDelay(pdMS_TO_TICKS(1));
+      }
+    } else {
+      if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
+        Clear_Flag(&run_status.exp, EXP_LAZER_POWER);
+      }
+      if (Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
+        Clear_Flag(&run_status.exp, EXP_LAZER_AGING);
+      }
+      return 0;
+    }
+  } while (1);
 }
 
 

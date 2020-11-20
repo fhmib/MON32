@@ -402,10 +402,10 @@ uint8_t Cmd_Set_Tosa()
 {
   int16_t val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA));
   double power_h, power_l;
-  osStatus_t status;
+  //osStatus_t status;
 
   MsgStruct msg;
-  uint8_t msg_val;
+  //uint8_t msg_val;
 
   power_h = (double)val / 100;
   val = (int16_t)switch_endian_16(*(uint16_t*)(trans_buf.buf + CMD_SEQ_MSG_DATA + 2));
@@ -431,7 +431,7 @@ uint8_t Cmd_Set_Tosa()
   msg.type = MSG_TYPE_LAZER_POWER;
   msg.pbuf = NULL;
   osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
-#if 1
+#if 0
   status = osMessageQueueGet(mid_CmdProcess, &msg, 0U, pdMS_TO_TICKS(800) / 2);
   if (status != osOK) {
     THROW_LOG(MSG_TYPE_ERROR_LOG, "osMessageQueueGet() timeout\n");

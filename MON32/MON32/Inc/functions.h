@@ -202,9 +202,9 @@ typedef enum {
 
 #define TOSA_TABLE_COUNT  10
 typedef struct {
-  uint16_t tosa_dac;
-  uint16_t tec_dac;
-  uint16_t tap_adc;
+  uint32_t tosa_dac;
+  uint32_t tec_dac;
+  uint32_t tap_adc;
   double tap_power;
 } TosaCalData;
 

@@ -65,6 +65,7 @@ extern double tosa_power_low_min_thr;
 
 extern uint8_t device_busy;
 extern uint8_t allow_tosa;
+extern uint8_t enable_tosa_failed;
 
 extern const uint32_t error_file_flash_addr[];
 extern const uint32_t error_file_flash_end;
@@ -73,6 +74,8 @@ extern const uint32_t normal_file_flash_addr[];
 extern const uint32_t normal_file_flash_end;
 extern const uint8_t normal_file_flash_count;
 extern LogFileState log_file_state;
+
+//extern double power_arr_for_test[];
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -80,9 +83,9 @@ extern LogFileState log_file_state;
 #define UART_PROCESS_PRIORITY     osPriorityRealtime6
 #define WATCHDOG_PRIORITY         osPriorityISR
 #define INTERRUPT_TASK_PRIORITY   osPriorityISR
-#define CMD_PROCESS_PRIORITY      osPriorityHigh
+#define CMD_PROCESS_PRIORITY      osPriorityRealtime
 #define LOG_MESSAGE_PRIORITY      osPriorityLow
-#define MONITOR_PRIORITY          osPriorityAboveNormal
+#define MONITOR_PRIORITY          osPriorityNormal
 #define LAZER_MANAGER_PRIORITY    osPriorityHigh
 
 #define WATCH_DOG_DELAY_TIME      500 // ms

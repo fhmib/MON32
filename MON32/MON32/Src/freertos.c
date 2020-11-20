@@ -961,7 +961,7 @@ void monitorTask(void *argument)
       if (run_status.tosa_enable) {
         // Power
         if (!run_status.modulation) {
-          if ((ret = Get_Tap_Power(&voltage)) != 0) {
+          if ((ret = get_tap_pd_power(&value, &voltage)) != 0) {
             if (!Is_Flag_Set(&run_status.internal_exp, INT_EXP_TAP_PD)) {
               THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u\n", ret);
               Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
@@ -985,10 +985,12 @@ void monitorTask(void *argument)
         // TEC LOSS LOCK
         if (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
           if (!Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+            THROW_LOG(MSG_TYPE_NORMAL_LOG, "TEC lock loss\n");
             Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
           }
         } else {
           if (Is_Flag_Set(&run_status.exp, EXP_TEC_TEMP_LOSS)) {
+            THROW_LOG(MSG_TYPE_NORMAL_LOG, "TEC locked\n");
             Clear_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
           }
         }
@@ -1072,7 +1074,7 @@ void lazerManagerTask(void *argument)
   uint8_t ret;
   MsgStruct msg;
   double power_cur, power_sub, power_dst;
-  uint32_t u_val32;
+  uint32_t i, times;
 
   osDelay(pdMS_TO_TICKS(500));
 
@@ -1306,21 +1308,12 @@ void lazerManagerTask(void *argument)
         enable_tosa_failed = 1;
         continue;
       }
-      osDelay(pdMS_TO_TICKS(1));
-
-      u_val32 = 0;
-      while (!Is_Tec_Lock()) {
-        osDelay(5);
-        if (++u_val32 > 50) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-          break;
-        }
-      }
+      osDelay(pdMS_TO_TICKS(100));
 
       if (!run_status.modulation) {
         if (Cali_Power(run_status.tosa_dst_power_high)) {
           allow_tosa = 0;
+          run_status.tosa_enable = 0;
           THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
           Disable_Tosa();
           continue;
@@ -1329,27 +1322,39 @@ void lazerManagerTask(void *argument)
       
       Set_Lazer_Ready();
 
-      if (Is_Tec_Lock()) {
+      i = 0;
+      times = 0;
+      while (i++ < 100) {
+        if (Is_Tec_Lock()) {
+          if (++times > 5) {
+            break;
+          }
+        }
+        osDelay(5);
+      }
+      if (times > 5) {
         Update_Tec_Dest_Temp(&run_status.thr_table);
+      } else {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+        Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+        break;
       }
       run_status.allow_monitor = 1;
-      Set_Lazer_Ready();
     } else if (msg.type == MSG_TYPE_LAZER_DISABLE) {
       run_status.allow_monitor = 0;
       Clear_Lazer_Ready();
 
       Disable_Tosa();
     } else if (msg.type == MSG_TYPE_LAZER_POWER) {
-      msg.type = MSG_TYPE_CMD_PROCESS;
-      msg.pbuf = pvPortMalloc(1);
-      msg.length = 1;
+      //msg.type = MSG_TYPE_CMD_PROCESS;
+      //msg.pbuf = pvPortMalloc(1);
+      //msg.length = 1;
 
       run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
       run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
 
       if (run_status.tosa_enable) {
         run_status.allow_monitor = 0;
-        Clear_Lazer_Ready();
         
         if (run_status.modulation) {
           status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
@@ -1358,52 +1363,42 @@ void lazerManagerTask(void *argument)
           } else {
             DAC5541_Write(run_status.tosa_low.tosa_dac);
           }
-          osDelay(pdMS_TO_TICKS(1));
-
-          u_val32 = 0;
-          while (!Is_Tec_Lock()) {
-            osDelay(5);
-            if (++u_val32 > 50) {
-              THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-              break;
-            }
-          }
         } else {
           status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
           DAC5541_Write(run_status.tosa_high.tosa_dac);
           osDelay(1);
-
-          u_val32 = 0;
-          while (!Is_Tec_Lock()) {
-            osDelay(5);
-            if (++u_val32 > 50) {
-              THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-              break;
-            }
-          }
-
           if (Cali_Power(run_status.tosa_dst_power_high)) {
             THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
             allow_tosa = 0;
             run_status.tosa_enable = 0;
             Disable_Tosa();
             // return failure
-            *(uint8_t*)msg.pbuf = 1;
-            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+            //*(uint8_t*)msg.pbuf = 1;
+            //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
             continue;
           }
         }
 
-        Set_Lazer_Ready();
-
         // return success
-        *(uint8_t*)msg.pbuf = 0;
-        osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
+        //*(uint8_t*)msg.pbuf = 0;
+        //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
 
-        if (Is_Tec_Lock()) {
+        i = 0;
+        times = 0;
+        while (i++ < 100) {
+          if (Is_Tec_Lock()) {
+            if (++times > 5) {
+              break;
+            }
+          }
+          osDelay(5);
+        }
+        if (times > 5) {
           Update_Tec_Dest_Temp(&run_status.thr_table);
+        } else {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          break;
         }
         run_status.allow_monitor = 1;
       } else {
@@ -1418,27 +1413,29 @@ void lazerManagerTask(void *argument)
 
       if (run_status.tosa_enable) {
         run_status.allow_monitor = 0;
-        Clear_Lazer_Ready();
         
         status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
-        u_val32 = 0;
-        while (!Is_Tec_Lock()) {
-          osDelay(5);
-          if (++u_val32 > 50) {
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-            break;
-          }
-        }
-
-        Set_Lazer_Ready();
 
         run_status.modulation = 1;
         HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
         HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_3);
 
-        if (Is_Tec_Lock()) {
+        i = 0;
+        times = 0;
+        while (i++ < 100) {
+          if (Is_Tec_Lock()) {
+            if (++times > 5) {
+              break;
+            }
+          }
+          osDelay(5);
+        }
+        if (times > 5) {
           Update_Tec_Dest_Temp(&run_status.thr_table);
+        } else {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          break;
         }
         run_status.allow_monitor = 1;
       } else {
@@ -1462,21 +1459,10 @@ void lazerManagerTask(void *argument)
       
       if (run_status.tosa_enable) {
         run_status.allow_monitor = 0;
-        Clear_Lazer_Ready();
         
         status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
         DAC5541_Write(run_status.tosa_high.tosa_dac);
         osDelay(pdMS_TO_TICKS(1));
-
-        u_val32 = 0;
-        while (!Is_Tec_Lock()) {
-          osDelay(5);
-          if (++u_val32 > 50) {
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-            Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-            break;
-          }
-        }
 
         if (Cali_Power(run_status.tosa_dst_power_high)) {
           THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
@@ -1489,10 +1475,23 @@ void lazerManagerTask(void *argument)
           continue;
         }
 
-        Set_Lazer_Ready();
 
-        if (Is_Tec_Lock()) {
+        i = 0;
+        times = 0;
+        while (i++ < 100) {
+          if (Is_Tec_Lock()) {
+            if (++times > 5) {
+              break;
+            }
+          }
+          osDelay(5);
+        }
+        if (times > 5) {
           Update_Tec_Dest_Temp(&run_status.thr_table);
+        } else {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
+          Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
+          break;
         }
         run_status.allow_monitor = 1;
       }
