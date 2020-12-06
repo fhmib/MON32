@@ -53,10 +53,12 @@
 /* USER CODE BEGIN Variables */
 osSemaphoreId_t uartProcessSemaphore;
 osSemaphoreId_t cmdProcessSemaphore;
+osSemaphoreId_t switchSemaphore;
 osSemaphoreId_t logEraseSemaphore;                  // semaphore id
 
 osMessageQueueId_t mid_LogMsg;
 osMessageQueueId_t mid_ISR;                // message queue id
+osMessageQueueId_t mid_SwISR;                // message queue id
 osMessageQueueId_t mid_LazerManager;                // message queue id
 osMessageQueueId_t mid_CmdProcess;                // message queue id
 
@@ -67,6 +69,7 @@ osMutexId_t spi3Mutex;
 osMutexId_t spi4Mutex;
 osMutexId_t spi5Mutex;
 osMutexId_t spi6Mutex;
+osMutexId_t swMutex;
 const osMutexAttr_t Thread_Mutex_attr = {
   "Mutex",                              // human readable mutex name
   osMutexPrioInherit,                       // attr_bits
@@ -98,6 +101,13 @@ const osThreadAttr_t watchdogTask_attributes = {
 osThreadId_t isrTaskHandle;
 const osThreadAttr_t isrTask_attributes = {
   .name = "isrTask",
+  .priority = (osPriority_t) INTERRUPT_TASK_PRIORITY,
+  .stack_size = 1024
+};
+
+osThreadId_t swIsrTaskHandle;
+const osThreadAttr_t swIsrTask_attributes = {
+  .name = "swIsrTask",
   .priority = (osPriority_t) INTERRUPT_TASK_PRIORITY,
   .stack_size = 1024
 };
@@ -138,6 +148,7 @@ void uartProcessTask(void *argument);
 void cmdProcessTask(void *argument);
 void watchdogTask(void *argument);
 void isrTask(void *argument);
+void swIsrTask(void *argument);
 void logTask(void *argument);
 void monitorTask(void *argument);
 void lazerManagerTask(void *argument);
@@ -174,6 +185,11 @@ void MX_FREERTOS_Init(void) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
   }
 
+  switchSemaphore = osSemaphoreNew(1U, 0U, NULL);
+  if (switchSemaphore == NULL) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
+  }
+
   logEraseSemaphore = osSemaphoreNew(1U, 0U, NULL);
   if (logEraseSemaphore == NULL) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
@@ -186,6 +202,11 @@ void MX_FREERTOS_Init(void) {
 
   mid_ISR = osMessageQueueNew(ISR_QUEUE_LENGTH, sizeof(MsgStruct), NULL);
   if (mid_ISR == NULL) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
+  }
+
+  mid_SwISR = osMessageQueueNew(SW_ISR_QUEUE_LENGTH, sizeof(MsgStruct), NULL);
+  if (mid_SwISR == NULL) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
   }
 
@@ -234,6 +255,11 @@ void MX_FREERTOS_Init(void) {
     Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
   }
 
+  swMutex = osMutexNew(&Thread_Mutex_attr);
+  if (swMutex == NULL) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_INIT);
+  }
+
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -254,6 +280,7 @@ void MX_FREERTOS_Init(void) {
   cmdProcessTaskHandle = osThreadNew(cmdProcessTask, NULL, &cmdProcessTask_attributes);
   watchdogTaskHandle = osThreadNew(watchdogTask, NULL, &watchdogTask_attributes);
   isrTaskHandle = osThreadNew(isrTask, NULL, &isrTask_attributes);
+  swIsrTaskHandle = osThreadNew(swIsrTask, NULL, &swIsrTask_attributes);
   logTaskHandle = osThreadNew(logTask, NULL, &logTask_attributes);
   monTaskHandle = osThreadNew(monitorTask, NULL, &monTask_attributes);
   lazerManagerTaskHandle = osThreadNew(lazerManagerTask, NULL, &lazerManagerTask_attributes);
@@ -304,8 +331,6 @@ void uartProcessTask(void *argument)
   uart_sync.ProcessTimeout = 0;
   uart_sync.ProcessOnGoing = 0;
   trans_buf.stage = TRANS_WAIT_START;
-  
-  device_busy = 0;
 
   for(;;)
   {
@@ -475,24 +500,32 @@ void isrTask(void *argument)
         continue;
       }
 
+      if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+        continue;
+      }
+
       Clear_Switch_Ready(switch_channel);
       if (Set_Switch(switch_channel, switch_pos)) {
         run_status.tx_switch_channel = 0xFF;
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Set Switch failed in io mode\n");
+        osMutexRelease(swMutex);
         continue;
       }
 
       run_status.tx_switch_channel = switch_pos;
-      osDelay(pdMS_TO_TICKS(4));
+      //osDelay(pdMS_TO_TICKS(4));
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
         Reset_Switch(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
+        osMutexRelease(swMutex);
         continue;
       }
 
       Set_Switch_Ready(switch_channel);
+      osMutexRelease(swMutex);
     } else if (msg.type == MSG_TYPE_SWITCH2_ISR) {
       switch_channel = RX_SWITCH_CHANNEL;
       switch_pos = Get_Switch_Position_By_IO(switch_channel);
@@ -503,32 +536,43 @@ void isrTask(void *argument)
         continue;
       }
 
+      if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+        continue;
+      }
+
       Clear_Switch_Ready(switch_channel);
       if (Set_Switch(switch_channel, switch_pos)) {
         run_status.rx_switch_channel = 0xFF;
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Set Switch failed in io mode\n");
+        osMutexRelease(swMutex);
         continue;
       }
 
       run_status.rx_switch_channel = switch_pos;
-      osDelay(pdMS_TO_TICKS(4));
+      // osDelay(pdMS_TO_TICKS(4));
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
         Reset_Switch(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
+        osMutexRelease(swMutex);
         continue;
       }
 
       Set_Switch_Ready(switch_channel);
+      osMutexRelease(swMutex);
     } else if (msg.type == MSG_TYPE_SELF_CHECK_SWITCH) {
       if (run_status.osc_status == OSC_ONGOING) {
+        msg.type = MSG_TYPE_SELF_TEST_STEP_2;
+        msg.pbuf = NULL;
         // Switch Loopback
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (Set_Switch(TX_SWITCH_CHANNEL, 64)) {
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
+          osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
         run_status.tx_switch_channel = 64;
@@ -536,6 +580,7 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 64) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
+          osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
 
@@ -544,6 +589,7 @@ void isrTask(void *argument)
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
+          osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
         run_status.rx_switch_channel = 32;
@@ -551,22 +597,24 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 32) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
+          osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
 
-        msg.type = MSG_TYPE_SELF_TEST_STEP_2;
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       } else if (run_status.osc_status == OSC_SUCCESS) {
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (Set_Switch(TX_SWITCH_CHANNEL, 0)) {
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
+          osMutexRelease(swMutex);
           continue;
         }
         run_status.tx_switch_channel = 0;
         // Check
         if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 0) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
+          osMutexRelease(swMutex);
           continue;
         }
         Set_Switch_Ready(TX_SWITCH_CHANNEL);
@@ -575,29 +623,74 @@ void isrTask(void *argument)
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
+          osMutexRelease(swMutex);
           continue;
         }
         run_status.rx_switch_channel = 0;
         // Check
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
+          osMutexRelease(swMutex);
           continue;
         }
         Set_Switch_Ready(RX_SWITCH_CHANNEL);
+        osMutexRelease(swMutex);
       } else if (run_status.osc_status == OSC_FAILURE) {
         Clear_Switch_Ready(RX_SWITCH_CHANNEL);
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
+          osMutexRelease(swMutex);
           continue;
         }
         run_status.rx_switch_channel = 0;
         // Check
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
+          osMutexRelease(swMutex);
           continue;
         }
         Set_Switch_Ready(RX_SWITCH_CHANNEL);
+        osMutexRelease(swMutex);
+      }
+    }
+  }
+}
+
+void swIsrTask(void *argument)
+{
+  osStatus_t status;
+  MsgStruct msg;
+
+  for (;;)
+  {
+    status = osMessageQueueGet(mid_SwISR, &msg, 0U, osWaitForever);
+    if (status != osOK)
+      continue;
+
+    if (msg.type == MSG_TYPE_SWITCH_DAC_ISR) {
+      if (sw_tim_control.cur_x < sw_tim_control.dst_x) {
+        sw_tim_control.cur_x = (sw_tim_control.dst_x - sw_tim_control.cur_x > sw_tim_control.step) ?\
+                                (sw_tim_control.cur_x + sw_tim_control.step) : (sw_tim_control.dst_x);
+      } else if (sw_tim_control.cur_x > sw_tim_control.dst_x) {
+        sw_tim_control.cur_x = (sw_tim_control.cur_x - sw_tim_control.dst_x > sw_tim_control.step) ?\
+                                (sw_tim_control.cur_x - sw_tim_control.step) : (sw_tim_control.dst_x);
+      }
+      
+      if (sw_tim_control.cur_y < sw_tim_control.dst_y) {
+        sw_tim_control.cur_y = (sw_tim_control.dst_y - sw_tim_control.cur_y > sw_tim_control.step) ?\
+                                (sw_tim_control.cur_y + sw_tim_control.step) : (sw_tim_control.dst_y);
+      } else if (sw_tim_control.cur_y > sw_tim_control.dst_y) {
+        sw_tim_control.cur_y = (sw_tim_control.cur_y - sw_tim_control.dst_y > sw_tim_control.step) ?\
+                                (sw_tim_control.cur_y - sw_tim_control.step) : (sw_tim_control.dst_y);
+      }
+
+      set_sw_dac_2(sw_tim_control.sw_num, sw_tim_control.cur_x, sw_tim_control.cur_y);
+
+      if (sw_tim_control.cur_x == sw_tim_control.dst_x && sw_tim_control.cur_y == sw_tim_control.dst_y) {
+        osSemaphoreRelease(switchSemaphore);
+      } else {
+        HAL_TIM_Base_Start_IT(&htim6);
       }
     }
   }
@@ -768,12 +861,22 @@ void monitorTask(void *argument)
   uint16_t value;
   uint8_t ret;
   double voltage, temp;
-  uint8_t pre_alarm;
-  uint32_t pre_exp_value;
   MsgStruct msg;
 
   osDelay(pdMS_TO_TICKS(500));
-  pre_alarm = run_status.exp == 0 ? 0: 1;
+
+  if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
+    run_status.rx_switch_channel = 0xFF;
+  }
+  run_status.rx_switch_channel = 0;
+  // Check
+  if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
+    Reset_Switch(RX_SWITCH_CHANNEL);
+  } else {
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
+  }
+
+  device_busy = 0;
 
   for (;;) {
     // 2x32 Switch Block signal
@@ -1039,23 +1142,23 @@ void monitorTask(void *argument)
     }
 
 
-    if (run_status.exp && !pre_alarm) {
+    if (run_status.exp && !run_status.pre_alarm) {
       Set_Alarm();
       if (Update_History_Alarm(run_status.exp) != osOK) {
         Set_Flag(&run_status.internal_exp, INT_EXP_UP_ALARM);
       }
-      pre_alarm = 1;
-      pre_exp_value = run_status.exp;
-    } else if (!run_status.exp && pre_alarm) {
+      run_status.pre_alarm = 1;
+      run_status.pre_exp_value = run_status.exp;
+    } else if (!run_status.exp && run_status.pre_alarm) {
       Clear_Alarm();
-      pre_alarm = 0;
-      pre_exp_value = 0;
-    } else if (run_status.exp && pre_alarm) {
-      if (run_status.exp != pre_exp_value) {
+      run_status.pre_alarm = 0;
+      run_status.pre_exp_value = 0;
+    } else if (run_status.exp && run_status.pre_alarm) {
+      if (run_status.exp != run_status.pre_exp_value) {
         if (Update_History_Alarm(run_status.exp) != osOK) {
           Set_Flag(&run_status.internal_exp, INT_EXP_UP_ALARM);
         }
-        pre_exp_value = run_status.exp;
+        run_status.pre_exp_value = run_status.exp;
       }
     }
 
@@ -1084,211 +1187,6 @@ void lazerManagerTask(void *argument)
     if (status != osOK)
       continue;
 
-#if 0
-    if (msg.type == MSG_TYPE_LAZER_ENABLE) {
-      if ((ret = Enable_Tosa()) != 0) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
-        if (!print_control) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Enable Tosa failed, ret = %u\n", ret);
-          print_control = 1;
-        }
-        continue;
-      }
-      print_control = 0;
-      run_status.tosa_enable = 1;
-      msg.pbuf = pvPortMalloc(8);
-      msg.length = 8;
-      msg.type = MSG_TYPE_LAZER_POWER;
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf);
-      BE32_To_Buffer((uint32_t)(0xFFFFFFFF), (uint8_t*)msg.pbuf + 4);
-      osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
-    } else if (msg.type == MSG_TYPE_LAZER_DISABLE) {
-      Clear_Lazer_Ready();
-      run_status.allow_monitor = 0;
-      if (Disable_Tosa()) {
-        Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
-      }
-      run_status.tosa_enable = 0;
-    } else if (msg.type == MSG_TYPE_LAZER_POWER) {
-      Clear_Lazer_Ready();
-      u_val32 = Buffer_To_BE32((uint8_t*)msg.pbuf);
-      if (u_val32 != 0xFFFFFFFF) {
-        power_h = (double)(int32_t)u_val32 / 100;
-        u_val32 = Buffer_To_BE32((uint8_t*)msg.pbuf + 4);
-        power_l = (double)(int32_t)u_val32 / 100;
-        run_status.tosa_high = Get_Tosa_Data(power_h);
-        run_status.tosa_low = Get_Tosa_Data(power_l);
-        cmdPro_control = 1;
-      } else {
-        //power_h = run_status.tosa_high.tap_power;
-        //power_l = run_status.tosa_low.tap_power;
-        power_h = run_status.tosa_dst_power_high;
-        power_l = run_status.tosa_dst_power_low;
-      }
-      if (msg.pbuf != NULL) {
-        vPortFree(msg.pbuf);
-        msg.pbuf = NULL;
-      }
-
-      i = 0;
-      power_dst = power_h;
-      do {
-        ++i;
-        // set tec
-        if (run_status.modulation) {
-          status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
-        } else {
-          status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
-        }
-        if (status != osOK) {
-          Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-        }
-
-        if (run_status.tosa_enable) {
-        // TODO: wait until tec ready
-          u_val32 = 0;
-          while (HAL_GPIO_ReadPin(TMPGD_GPIO_Port, TMPGD_Pin) == GPIO_PIN_RESET) {
-            osDelay(5);
-            if (++u_val32 > 100) {
-              THROW_LOG(MSG_TYPE_ERROR_LOG, "TMPGD error\n");
-              Set_Flag(&run_status.internal_exp, INT_EXP_TMPGD);
-              Set_Flag(&run_status.exp, EXP_TEC_TEMP_LOSS);
-            }
-          }
-          if (u_val32 > 100) {
-            Reset_Tec_Dest_Temp(&run_status.thr_table);
-          } else {
-            osDelay(pdMS_TO_TICKS(20));
-            Update_Tec_Dest_Temp(&run_status.thr_table);
-          }
-        }
-
-        // Set tosa
-        if (!run_status.modulation) {
-          DAC5541_Write(run_status.tosa_high.tosa_dac);
-          osDelay(pdMS_TO_TICKS(1));
-        }
-        
-        // check power
-        if (run_status.tosa_enable && !run_status.modulation) {
-          if ((ret = Get_Tap_Power(&power_tap)) != 0) {
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "Get_Tap_Power error code = %u\n", ret);
-            Set_Flag(&run_status.internal_exp, INT_EXP_TAP_PD);
-            i = 101;
-            break;
-          }
-          if (power_tap < -10) {
-            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Tap Power = %lf is not normal!\n", power_tap);
-            i = 103;
-            break;
-          }
-          if (power_tap > power_dst + 0.3 || power_tap < power_dst - 0.3) {
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "Tap power = %lf, destination is %lf\n", power_tap, power_dst);
-            power_h = power_dst - (power_tap - power_dst);
-#if 0
-            if (power_h > tosa_power_high_max_thr + 2 || power_l < tosa_power_low_min_thr - 2) {
-              THROW_LOG(MSG_TYPE_ERROR_LOG, "Module cannot reach dest power, power_h = %lf\n", power_h);
-              Set_Flag(&run_status.exp, EXP_LAZER_POWER);
-              i = 101;
-              break;
-            }
-#endif
-            THROW_LOG(MSG_TYPE_ERROR_LOG, "Research power data = %lf. times = %u\n", power_h, i);
-            run_status.tosa_high = Get_Tosa_Data(power_h);
-            if (run_status.tosa_high.tosa_dac > 0x10000 * 0.95) {
-              THROW_LOG(MSG_TYPE_ERROR_LOG, "Dac value exceeds limitation %#X\n", run_status.tosa_high.tosa_dac);
-              i = 102;
-              break;
-            }
-          } else {
-            i = 0;
-            break;
-          }
-        }
-      } while (run_status.tosa_enable && !run_status.modulation);
-      
-      if (i == 0) {
-        if (Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
-          Clear_Flag(&run_status.exp, EXP_LAZER_POWER);
-        }
-        if (Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
-          Clear_Flag(&run_status.exp, EXP_LAZER_AGING);
-        }
-        Set_Lazer_Ready();
-        run_status.allow_monitor = 1;
-        //return success
-        if (cmdPro_control) {
-          msg.type = MSG_TYPE_CMD_PROCESS;
-          msg.pbuf = pvPortMalloc(1);
-          msg.length = 1;
-          *(uint8_t*)msg.pbuf = 0;
-          osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
-          cmdPro_control = 0;
-        }
-      } else if (i == 101 || i == 103) {
-        // close tosa
-        run_status.allow_monitor = 0;
-        allow_tosa = 0;
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
-        if (Disable_Tosa()) {
-          Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
-        }
-        run_status.tosa_enable = 0;
-        // reutrn failure
-        if (cmdPro_control) {
-          msg.type = MSG_TYPE_CMD_PROCESS;
-          msg.pbuf = pvPortMalloc(1);
-          msg.length = 1;
-          *(uint8_t*)msg.pbuf = 1;
-          osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
-          cmdPro_control = 0;
-        }
-      } else if (i == 102) {
-        if (power_tap < 0) {
-          // restore
-          run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
-          run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
-          // aging alarm
-          if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_AGING)) {
-            Set_Flag(&run_status.exp, EXP_LAZER_AGING);
-          }
-          // close tosa
-          allow_tosa = 0;
-          run_status.allow_monitor = 0;
-          THROW_LOG(MSG_TYPE_NORMAL_LOG, "Module has disabled Tosa until reset\n");
-          if (Disable_Tosa()) {
-            Set_Flag(&run_status.internal_exp, INT_EXP_TOSA);
-          }
-          run_status.tosa_enable = 0;
-          // return failure
-          if (cmdPro_control) {
-            msg.type = MSG_TYPE_CMD_PROCESS;
-            msg.pbuf = pvPortMalloc(1);
-            msg.length = 1;
-            *(uint8_t*)msg.pbuf = 1;
-            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
-            cmdPro_control = 0;
-          }
-        } else {
-          // power alarm
-          if (power_tap > power_dst + 2 || power_tap < power_dst - 2) {
-            if (!Is_Flag_Set(&run_status.exp, EXP_LAZER_POWER)) {
-              Set_Flag(&run_status.exp, EXP_LAZER_POWER);
-            }
-          }
-          run_status.allow_monitor = 1;
-          // return success
-          if (cmdPro_control) {
-            msg.type = MSG_TYPE_CMD_PROCESS;
-            msg.pbuf = pvPortMalloc(1);
-            msg.length = 1;
-            *(uint8_t*)msg.pbuf = 0;
-            osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
-            cmdPro_control = 0;
-          }
-        }
-      }
-#endif
     if (msg.type == MSG_TYPE_LAZER_ENABLE) {
       if (run_status.modulation) {
         status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
@@ -1509,7 +1407,12 @@ void lazerManagerTask(void *argument)
       if (Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
         Clear_Flag(&run_status.exp, EXP_SWITCH);
       }
-  
+
+      if (osMutexAcquire(swMutex, 50) != osOK) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed when selfcheck\n");
+        continue;
+      }
+
       run_status.osc_status = OSC_ONGOING;
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
       msg.pbuf = NULL;

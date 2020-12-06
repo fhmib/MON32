@@ -273,9 +273,9 @@ int8_t cmd_IL(uint8_t argc, char **argv)
     return ret;
   }
 
-  PRINT("Insertion Loss:\r\n");
+  PRINT("Insertion Loss %u:\r\n", rBuf[CMD_SEQ_MSG_DATA]);
   for (i = 0; i < 64; ++i) {
-    val = (int16_t)Buffer_To_BE16(&rBuf[CMD_SEQ_MSG_DATA + i * 2]);
+    val = (int16_t)Buffer_To_BE16(&rBuf[CMD_SEQ_MSG_DATA + 1 + i * 2]);
     val_f = (double)val / 100;
     PRINT("%u,%.2lf\r\n", i + 1, val_f);
   }
@@ -426,8 +426,6 @@ int8_t cmd_voltage(uint8_t argc, char **argv)
 {
   if (argc == 2 && !strcasecmp(argv[1], "get")) {
     return get_voltage();
-//  } else if (argc == 3 && !strcasecmp(argv[1], "get") && !strcasecmp(argv[2], "thr")) {
-//    return get_voltage_threshold();
   } else {
     cmd_help2(argv[0]);
   }
@@ -456,6 +454,52 @@ int8_t get_voltage()
     voltage = (double)value / 10;
     PRINT("Voltage Current Value : %.1lfV\r\n", voltage);
     p += 4;
+  }
+
+  return ret;
+}
+
+int8_t cmd_loopback(uint8_t argc, char **argv)
+{
+  if (argc == 2 && !strcasecmp(argv[1], "check")) {
+    return loopback_test();
+  } else if (argc == 2 && !strcasecmp(argv[1], "status")) {
+    return get_loopback_status();
+  } else {
+    cmd_help2(argv[0]);
+  }
+  return 0;
+}
+
+int8_t loopback_test(void)
+{
+  int8_t ret;
+
+  txBuf[0] = 1;
+  ret = process_command(CMD_LOOPBACK_TEST, txBuf, 1, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+
+  return ret;
+}
+
+int8_t get_loopback_status(void)
+{
+  int8_t ret;
+
+  ret = process_command(CMD_LOOPBACK_RESULT, txBuf, 0, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
+    PRINT("Loopback check success\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 1) {
+    PRINT("Loopback check failed\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 2) {
+    PRINT("Loopback check ongoing\r\n");
+  } else {
   }
 
   return ret;
@@ -600,7 +644,7 @@ int8_t upgrade_file(uint8_t verify)
   int8_t ret;
   uint32_t fw_crc;
   uint16_t seq = 1;
-  uint32_t fw_length, every_size = FW_BLOCK_MAX_SIZE, send_size = 0;
+  uint32_t fw_length, every_size, send_size = 0;
   uint8_t retry = 0;
 
   HAL_Delay(1);
@@ -620,7 +664,19 @@ int8_t upgrade_file(uint8_t verify)
            (fw_buf[FW_HEAD_FW_LENGTH + 2] << 8) | (fw_buf[FW_HEAD_FW_LENGTH + 3] << 0);
   fw_crc = (fw_buf[FW_HEAD_CRC] << 24) | (fw_buf[FW_HEAD_CRC + 1] << 16) |\
            (fw_buf[FW_HEAD_CRC + 2] << 8) | (fw_buf[FW_HEAD_CRC + 3] << 0);
-  HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256, fw_length, 1000 * 10);
+  if (fw_length > 0xFFFF) {
+    every_size = 0xFF00;
+    while (send_size < fw_length) {
+      if (send_size + every_size > fw_length) {
+        HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256 + send_size, fw_length - send_size, 1000 * 10);
+        send_size += fw_length - send_size;
+      } else {
+        HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256 + send_size, every_size, 1000 * 10);
+        send_size += every_size;
+      }
+    }
+  } else
+    HAL_UART_Receive(&TERMINAL_UART, fw_buf + 256, fw_length, 1000 * 10);
   PRINT2("Download success, Length = %u, crc = %#X\r\n", fw_length, fw_crc);
   if (verify) {
     if (Cal_CRC32(&fw_buf[256], fw_length) == fw_crc) {
@@ -636,6 +692,8 @@ int8_t upgrade_file(uint8_t verify)
   }
 
   PRINT2("Sending image...\r\n");
+  every_size = FW_BLOCK_MAX_SIZE;
+  send_size = 0;
   while (send_size < fw_length + FW_FILE_HEADER_LENGTH) {
     *(uint16_t*)(&txBuf[0]) = switch_endian_16(seq);
     /*
@@ -779,11 +837,11 @@ int8_t cmd_performance(uint8_t argc, char **argv)
         break;
       case 2:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
-        PRINT("LD_Current : %d(%#X)mA\r\n", val32, val32);
+        PRINT("TEC_Current : %d(%#X)mA\r\n", val32, val32);
         break;
       case 3:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
-        PRINT("LD_Voltage : %d(%#X)mV\r\n", val32, val32);
+        PRINT("TEC_Voltage : %d(%#X)mV\r\n", val32, val32);
         break;
       case 4:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
@@ -990,7 +1048,11 @@ int8_t log_content(uint8_t argc, char **argv)
 
       offset_returned = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 2]);
       PRINT("type = %u, offset = %u, length = %u\r\n", rBuf[CMD_SEQ_MSG_DATA], offset_returned, rBuf[CMD_SEQ_MSG_DATA + 1]);
-      PRINT_CHAR("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+      if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
+        PRINT_HEX("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+      } else {
+        PRINT_CHAR("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+      }
     }
   } else {
     txBuf[1] = (uint8_t)size;    
@@ -1002,7 +1064,11 @@ int8_t log_content(uint8_t argc, char **argv)
 
     offset_returned = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 2]);
     PRINT("type = %u, offset = %u, length = %u\r\n", rBuf[CMD_SEQ_MSG_DATA], offset_returned, rBuf[CMD_SEQ_MSG_DATA + 1]);
-    PRINT_CHAR("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+    if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
+      PRINT_HEX("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+    } else {
+      PRINT_CHAR("LOG", &rBuf[CMD_SEQ_MSG_DATA + 6], rBuf[CMD_SEQ_MSG_DATA + 1]);
+    }
   }
 
   return ret;
@@ -1016,7 +1082,7 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_adc(argc, argv);
   } else if (argc == 4 && !strcasecmp(argv[1], "tag")) {
     return debug_tag(argc, argv);
-  } else if (argc >= 5 && !strcasecmp(argv[1], "cal")) {
+  } else if (argc >= 4 && !strcasecmp(argv[1], "cal")) {
     return debug_cal(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "get_tosa_val")) {
     return debug_get_tosa_val(argc, argv);
@@ -1062,6 +1128,14 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_reset_alarm(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "inter_exp")) {
     return debug_get_inter_exp();
+  } else if (argc == 4 && !strcasecmp(argv[1], "sw_adc")) {
+    return debug_set_sw_adc(argc, argv);
+  } else if (argc == 2 && !strcasecmp(argv[1], "send_hex")) {
+    return debug_send_hex(argc, argv);
+  } else if (argc == 3 && !strcasecmp(argv[1], "send_hex") && !strcasecmp(argv[2], "no_check")) {
+    return debug_send_hex(argc, argv);
+  } else if (argc == 2 && !strcasecmp(argv[1], "check_cali")) {
+    return debug_check_cali();
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1283,6 +1357,13 @@ int8_t debug_cal(uint8_t argc, char **argv)
     BE32_To_Buffer(u_val, txBuf + 12);
     BE32_To_Buffer(val_x, txBuf + 16);
     ret = process_command(CMD_FOR_DEBUG, txBuf, 20, rBuf, &rLen);
+  } else if (argc == 4 && !strcasecmp(argv[2], "tec_temp")) {
+    sscanf(argv[3], "%lf", &d_val);
+    val_x = (int32_t)(d_val * 10);
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_CAL_DEF_TEMP, txBuf + 4);
+    BE32_To_Buffer(val_x, txBuf + 8);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 12, rBuf, &rLen);
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1356,6 +1437,9 @@ int8_t debug_dump(uint8_t argc, char **argv)
   } else if (!strcasecmp(argv[2], "pd2")) {
     which = 15;
     count = 10;
+  } else if (!strcasecmp(argv[2], "tec_temp")) {
+    which = 16;
+    count = 1;
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1449,6 +1533,10 @@ int8_t debug_dump(uint8_t argc, char **argv)
       d_val = (double)((int32_t)which) / 100;
       PRINT("%.2lf\r\n", d_val);
     }
+  } else if (which == 16) {
+    val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
+    d_val = (double)val_x / 10;
+    PRINT("TEC_TEMP: %.1lf\r\n", d_val);
   }
 
   return ret;
@@ -1806,46 +1894,77 @@ int8_t debug_spi(uint8_t argc, char **argv)
   uint8_t chan;
   uint8_t txbuf[2], rxbuf[2], chan_rb;
   HAL_StatusTypeDef hal_status;
-  uint16_t val;
+  uint16_t val, max, min;
+  uint32_t i, times;
   
   chan = (uint8_t)strtoul(argv[2], NULL, 10);
-  if (chan > 15) {
+  if (chan > 15 && (chan != 254) && (chan != 255)) {
     PRINT("Channel number invalid\r\n");
     return 1;
   }
-  txbuf[0] = (0x1 << 4) | (0x0 << 3) | (chan >> 1);
-  txbuf[1] = chan << 7;
-  PRINT("txbuf: %#X, %#X\r\n", txbuf[0], txbuf[1]);
-
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-  hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-  //osDelay(1);
-  PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
-
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-  hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-  //osDelay(1);
-  PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
-
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-  hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
-  HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-  PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
-
-  if (hal_status != HAL_OK) {
-    PRINT("Read ADC7953_SPI5 failed, ErrorCode = %#X\r\n", hspi5.ErrorCode);
-    return 2;
+  
+  if (chan == 254) {
+    times = sizeof(fw_buf) / 2;
+    chan = 0;
+  } else if (chan == 255) {
+    times = sizeof(fw_buf) / 2;
+    chan = 1;
+  } else {
+    times = 1;
   }
 
-  chan_rb = rxbuf[0] >> 4;
-  if (chan_rb != chan) {
-    PRINT("Read ADC7953_SPI5 failed, rChanIdx != chanIdx\r\n");
-    return 3;
-  } else {
-    val = ((rxbuf[0] & 0xf) << 8) | rxbuf[1];
+  txbuf[0] = (0x1 << 4) | (0x0 << 3) | (chan >> 1);
+  txbuf[1] = chan << 7;
+  // PRINT("txbuf: %#X, %#X\r\n", txbuf[0], txbuf[1]);
+
+  i = 0;
+  while (i++ < times) {
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+    hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+    //osDelay(1);
+    // PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
+
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+    hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+    //osDelay(1);
+    // PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
+
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+    hal_status = HAL_SPI_TransmitReceive(&hspi5, txbuf, rxbuf, 2, 50);
+    HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+    // PRINT("rxbuf: %#X, %#X\r\n", rxbuf[0], rxbuf[1]);
+
+    if (hal_status != HAL_OK) {
+      PRINT("Read ADC7953_SPI5 failed, ErrorCode = %#X\r\n", hspi5.ErrorCode);
+      return 2;
+    }
+
+    chan_rb = rxbuf[0] >> 4;
+    if (chan_rb != chan) {
+      PRINT("Read ADC7953_SPI5 failed, rChanIdx != chanIdx\r\n");
+      return 3;
+    } else {
+      val = ((rxbuf[0] & 0xf) << 8) | rxbuf[1];
+    }
+    
+    if (i == 1) {
+      max = min = val;
+    } else {
+      if (val > max) {
+        max = val;
+      }
+      if (val < min) {
+        min = val;
+      }
+    }
+  }
+  
+  if (times == 1) {
     PRINT("Value = %u\r\n", val);
+  } else {
+    PRINT("Max = %u, min = %u, times = %u\r\n", max, min, times);
   }
 
   return 0;
@@ -1977,6 +2096,121 @@ int8_t debug_get_inter_exp()
   return ret;
 }
 
+int8_t debug_set_sw_adc(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint32_t value;
+  double d_val;
+
+  value = strtoul(argv[2], NULL, 10);
+  d_val = atof(argv[3]);
+
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_SET_SW_ADC, txBuf + 4);
+  BE32_To_Buffer(value, txBuf + 8);
+  BE32_To_Buffer((uint32_t)(d_val * 1000), txBuf + 12);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 16, rBuf, &rLen);
+   if (ret) {
+    return ret;
+  }
+
+  return ret;
+}
+
+int8_t debug_send_hex(uint8_t argc, char **argv)
+{
+  char *p;
+  uint8_t *p_data = fw_buf + 1024 * 10;
+  uint32_t i;
+  uint8_t rcv_crc;
+  uint8_t rcv_len, err_code;
+
+  HAL_Delay(1);
+  __HAL_UART_DISABLE_IT(&TERMINAL_UART, UART_IT_RXNE);
+  CLEAR_BIT(TERMINAL_UART.Instance->SR, USART_SR_RXNE);
+  __HAL_UART_FLUSH_DRREGISTER(&TERMINAL_UART);
+  uart1_irq_sel = 0;
+  PRINT("Put data in 15 seconds...\r\n");
+
+  memset(fw_buf, 0, 1024 * 10);
+  if (HAL_UART_Receive(&TERMINAL_UART, fw_buf, 1024 * 10, 1000 * 15) != HAL_TIMEOUT) {
+    PRINT("Failed\r\n");
+    __HAL_UART_ENABLE_IT(&TERMINAL_UART, UART_IT_RXNE);
+    uart1_irq_sel = 1;
+    return 1;
+  }
+
+  __HAL_UART_ENABLE_IT(&TERMINAL_UART, UART_IT_RXNE);
+  uart1_irq_sel = 1;
+
+  if (strlen((char*)fw_buf) == 0) {
+    PRINT("No data received\r\n");
+  } else {
+    for (p = strtok((char*)fw_buf, " \t\r\n,"), i = 0; p != NULL; ++i, p = strtok(NULL, " \t\r\n,")) {
+      p_data[i] = (uint8_t)strtoul(p, NULL, 0);
+    }
+    if (argc == 3 && !strcasecmp(argv[2], "no_check")) {
+      rcv_crc = Cal_Check((uint8_t*)&p_data[1], i - 1);
+      p_data[i] = rcv_crc;
+      i += 1;
+    }
+    PRINT_HEX("tx_buf", p_data, i);
+    if (HAL_UART_Transmit(&COMMUNICATION_UART, p_data, i, 0xFF) != HAL_OK) {
+      EPT("Transmit failed\r\n");
+      return 100;
+    }
+    rBuf[0] = 0;
+    while (rBuf[0] != TRANS_START_BYTE) {
+      if (HAL_UART_Receive(&COMMUNICATION_UART, rBuf, 1, 950) != HAL_OK) {
+        EPT("Receive failed : Received timeout 1\r\n");
+        return 101;
+      }
+    }
+    if (HAL_UART_Receive(&COMMUNICATION_UART, rBuf + 1, 1, 0xFF) != HAL_OK) {
+      EPT("Receive failed : Received timeout 2\r\n");
+      return 102;
+    }
+    rcv_len = rBuf[1];
+    if (HAL_UART_Receive(&COMMUNICATION_UART, rBuf + 2, rcv_len - 1, 0xFF) != HAL_OK) {
+      EPT("Receive failed : Received timeout 3\r\n");
+      PRINT_HEX("Received messages", rBuf, 2);
+      return 103;
+    }
+    PRINT_HEX("rx_buf", rBuf, rcv_len + 1);
+
+    rcv_crc = Cal_Check(&rBuf[1], rcv_len - 1);
+    if (rcv_crc != rBuf[1 + rcv_len - 1]) {
+      EPT("Checksum failed\r\n");
+      return 104;
+    }
+
+    err_code = rBuf[1 + rcv_len - 2];
+
+    PRINT("Returned status from module is %d (= %#X)\r\n", err_code, err_code);
+    if (err_code != 0) {
+      return 105;
+    }
+  }
+
+  return 0;
+}
+
+int8_t debug_check_cali(void)
+{
+  int8_t ret;
+
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_CHECK_CALI, txBuf + 4);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  PRINT("CRC32 : %#X\r\n", Buffer_To_BE32(rBuf + CMD_SEQ_MSG_DATA));
+
+  return ret;
+}
+
 
 
 int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_buf, uint8_t *rx_len)
@@ -1985,6 +2219,7 @@ int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_bu
   uint32_t print_len;
   uint8_t rcv_crc;
   uint8_t rcv_len, err_code;
+  uint32_t tim2_counter_value;
 
   CLEAR_BIT(COMMUNICATION_UART.Instance->SR, USART_SR_RXNE);
   __HAL_UART_FLUSH_DRREGISTER(&COMMUNICATION_UART);
@@ -2011,6 +2246,10 @@ int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_bu
     PRINT_HEX("tx_buf", communication_buf, print_len);
   }
 
+  HAL_TIM_Base_Init(&htim2);
+  tim2_counter = 0;
+  __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+  HAL_TIM_Base_Start_IT(&htim2);
   if (HAL_UART_Transmit(&COMMUNICATION_UART, communication_buf, cmd_len, 0xFF) != HAL_OK) {
     EPT("Transmit failed\r\n");
     return 100;
@@ -2033,6 +2272,8 @@ int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_bu
     PRINT_HEX("Received messages", rx_buf, 2);
     return 103;
   }
+  HAL_TIM_Base_Stop_IT(&htim2);
+  tim2_counter_value = __HAL_TIM_GET_COUNTER(&htim2);
   if (print_trans_data && switch_endian_16(*(uint16_t*)&communication_buf[CMD_SEQ_MSG_ID]) != CMD_FOR_DEBUG) {
     print_len = rcv_len + 1;
 #if 0
@@ -2052,6 +2293,7 @@ int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_bu
 
   err_code = rx_buf[1 + rcv_len - 2];
 
+  PRINT("Time is %ums\r\n", tim2_counter * 1500 + tim2_counter_value);
   PRINT("Returned status from module is %d (= %#X)\r\n", err_code, err_code);
   if (err_code != 0) {
     return 105;

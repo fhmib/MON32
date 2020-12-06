@@ -64,7 +64,8 @@ double tosa_power_high_max_thr = 0;
 double tosa_power_low_min_thr = 0;
 
 uint8_t device_busy = 1;
-uint8_t allow_tosa = 1;
+uint8_t allow_tosa = 1; // Indicates allow tosa enable or not. Set by reset.
+uint8_t enable_tosa_failed = 0; // Indicates endable tosa failed. Clear when pro_dis_n is 0.
 
 const uint32_t error_file_flash_addr[] =  {  0x08100000, 0x08104000, 0x08108000, 0x0810C000, 0x08110000, 0x08120000,\
                                        0x08140000  };
@@ -76,6 +77,8 @@ const uint32_t normal_file_flash_end = 0x081BFFFF;
 const uint8_t normal_file_flash_count = sizeof(normal_file_flash_addr) / sizeof (normal_file_flash_addr[0]);
 
 LogFileState log_file_state;
+
+//double power_arr_for_test[10];
 
 RunTimeStatus run_status __attribute__((at(0x2002FC00)));
 /* USER CODE END PV */
@@ -525,9 +528,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
       // Rising Edge
       DAC5541_Write(run_status.tosa_high.tosa_dac);
+      run_status.power_mode = 1;
     } else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {
       // Failing Edge
       DAC5541_Write(run_status.tosa_low.tosa_dac);
+      run_status.power_mode = 0;
     }
   }
 }
@@ -564,7 +569,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM1 interrupt took place, inside
+  * @note   This function is called  when TIM11 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -575,7 +580,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM1) {
+  if (htim->Instance == TIM11) {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */

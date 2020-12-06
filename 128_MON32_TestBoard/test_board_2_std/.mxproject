@@ -1,7 +1,7 @@
 [PreviousGenFiles]
-HeaderPath=D:/Work/stm32_project/MON32/MON32_TestBoard/test_board_2_std/Inc
+HeaderPath=D:/Work/stm32_project/MON32/128_MON32_TestBoard/test_board_2_std/Inc
 HeaderFiles=gpio.h;usart.h;stm32f4xx_it.h;stm32f4xx_hal_conf.h;main.h;tim.h;spi.h;
-SourcePath=D:/Work/stm32_project/MON32/MON32_TestBoard/test_board_2_std/Src
+SourcePath=D:/Work/stm32_project/MON32/128_MON32_TestBoard/test_board_2_std/Src
 SourceFiles=gpio.c;usart.c;stm32f4xx_it.c;stm32f4xx_hal_msp.c;main.c;tim.c;spi.c;
 
 [PreviousLibFiles]

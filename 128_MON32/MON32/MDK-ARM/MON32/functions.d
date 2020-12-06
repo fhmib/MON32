@@ -62,3 +62,4 @@ mon32\functions.o: ../Inc/iwdg.h
 mon32\functions.o: ../Inc/i2c.h
 mon32\functions.o: ../Inc/spi.h
 mon32\functions.o: ../Inc/rtc.h
+mon32\functions.o: ../Inc/tim.h

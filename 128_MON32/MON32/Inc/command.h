@@ -104,6 +104,7 @@ typedef enum {
   CMD_DEBUG_CHECK_CALI    = 0x33,
   CMD_DEBUG_CAL_DEF_TEMP  = 0x34,
   CMD_DEBUG_INTER_EXP     = 0xFF,
+  CMD_DEBUG_UNLOCK        = 0x12345678,
 } CmdDebugId;
 
 typedef enum {

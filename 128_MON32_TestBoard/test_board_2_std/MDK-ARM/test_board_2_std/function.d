@@ -42,3 +42,5 @@ test_board_2_std\function.o: ../Inc/main.h
 test_board_2_std\function.o: ../Inc/ring_buffer.h
 test_board_2_std\function.o: ../Inc/tim.h
 test_board_2_std\function.o: ../Inc/spi.h
+test_board_2_std\function.o: ../Inc/xmodem.h
+test_board_2_std\function.o: ../Inc/flash_if.h

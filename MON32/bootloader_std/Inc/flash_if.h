@@ -91,7 +91,7 @@ enum {
 
 
 /* Notable Flash addresses */
-#define USER_FLASH_END_ADDRESS        0x08100000
+#define USER_FLASH_END_ADDRESS        0x08200000
 
 /* Define the user application size */
 #define BOOTLOADER_FLASH_SIZE         ((uint32_t)0x00008000)

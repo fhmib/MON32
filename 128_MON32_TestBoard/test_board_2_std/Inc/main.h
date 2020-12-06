@@ -107,6 +107,8 @@ uint32_t send_cmd(uint8_t ch, char *arg);
 #define SW1_D5_GPIO_Port GPIOH
 #define SW1_D4_Pin GPIO_PIN_10
 #define SW1_D4_GPIO_Port GPIOH
+#define OUT_VOL_3_3_Pin GPIO_PIN_1
+#define OUT_VOL_3_3_GPIO_Port GPIOG
 #define SW1_D0_Pin GPIO_PIN_6
 #define SW1_D0_GPIO_Port GPIOH
 #define SW1_D2_Pin GPIO_PIN_8
@@ -115,6 +117,8 @@ uint32_t send_cmd(uint8_t ch, char *arg);
 #define SW1_D3_GPIO_Port GPIOH
 #define SPI1_CS_Pin GPIO_PIN_4
 #define SPI1_CS_GPIO_Port GPIOA
+#define OUT_VOL_5_0_Pin GPIO_PIN_0
+#define OUT_VOL_5_0_GPIO_Port GPIOG
 #define SW1_D1_Pin GPIO_PIN_7
 #define SW1_D1_GPIO_Port GPIOH
 #define PRO_DIS_N_Pin GPIO_PIN_8

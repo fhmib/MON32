@@ -58,6 +58,7 @@ void startup_process()
   } else {
     if (*(uint32_t*)(FACTORY_ADDRESS) == 0xFFFFFFFF) {
       erase_up_status();
+      return ;
     }
   }
 #ifdef PRINT_DEBUG_MESSAGE

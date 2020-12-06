@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "128#MON32_testboard_1.0.0"
+#define VER "128#MON32_testboard_1.0.2"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 
@@ -238,6 +238,8 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 console_cmd cmdlist[] = {
+  {"poweron", cmd_power, "Command about power", "poweron", "poweron"},
+  {"poweroff", cmd_power, "Command about power", "poweroff", "poweroff"},
   {"sn", cmd_get_sn, "Get Serial Number", "sn", "sn"},
   {"mdate", cmd_get_date, "Get Menufacture Date", "date", "date"},
   {"pn", cmd_get_pn, "Get Part Number", "pn", "pn"},

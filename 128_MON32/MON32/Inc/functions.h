@@ -15,6 +15,7 @@ typedef enum {
   MSG_TYPE_FLASH_ISR,
   MSG_TYPE_SWITCH1_ISR,
   MSG_TYPE_SWITCH2_ISR,
+  MSG_TYPE_SWITCH_DAC_ISR,
   MSG_TYPE_SELF_CHECK_SWITCH,
   MSG_TYPE_SELF_TEST,
   MSG_TYPE_SELF_TEST_STEP_2,
@@ -268,6 +269,8 @@ typedef struct {
   uint8_t lazer_ready;
   uint8_t osc_status; // Optical path self-check status 0:OK 1:FAIL 2:ongoing
   uint8_t modulation;
+  uint8_t pre_alarm;
+  uint32_t pre_exp_value;
   uint32_t exp; // exception
   uint32_t internal_exp;
   TosaCalData tosa_low;
@@ -287,6 +290,17 @@ typedef struct {
   uint8_t start;
   uint8_t end;
 } AlarmHistoryState;
+
+typedef struct {
+  uint32_t counter;
+  uint32_t time; // Unit: 100us
+  int32_t step;
+  uint8_t sw_num;
+  int32_t dst_x;
+  int32_t dst_y;
+  int32_t cur_x;
+  int32_t cur_y;
+} SwTimControl;
 
 void Throw_Log(uint8_t type, uint8_t *buf, uint32_t length);
 uint32_t Log_Write(uint32_t addr, uint8_t *pbuf, uint32_t length);
@@ -356,6 +370,7 @@ uint8_t Get_Threshold(uint8_t alarm_id, uint8_t *pBuf);
 
 uint8_t debug_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y);
 int8_t set_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y);
+void set_sw_dac_2(uint8_t sw_num, int32_t val_x, int32_t val_y);
 uint8_t debug_sw_adc(uint8_t sw_num);
 uint8_t debug_vol_adc(uint8_t chan);
 uint8_t debug_tag(uint8_t type, uint8_t *p, uint32_t length);

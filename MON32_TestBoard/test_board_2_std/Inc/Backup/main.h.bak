@@ -49,6 +49,7 @@ extern uint8_t communication_buf[];
 extern uint8_t uart1_irq_sel;
 extern uint8_t print_trans_data;
 extern uint32_t tim_counter_max;
+extern uint32_t tim2_counter;
 
 /* USER CODE END EC */
 

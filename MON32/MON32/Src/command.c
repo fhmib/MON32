@@ -17,12 +17,14 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S1.1"; // 4 bytes
+char *fw_version = "S1.2"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
 
 extern UpgradeFlashState upgrade_status;
+
+extern osMutexId_t swMutex;
 
 CmdStruct command_list[] = {
   {CMD_QUERY_SN, 4, Cmd_Query_SN},
@@ -232,6 +234,12 @@ uint8_t Cmd_Set_Switch(void)
     return RESPOND_FAILURE;
   }
 
+  if (osMutexAcquire(swMutex, 50) != osOK) {
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed when excute command\n");
+    FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
+  }
+
   Clear_Switch_Ready(switch_channel);
 
   if (Set_Switch(switch_channel, switch_pos)) {
@@ -242,6 +250,7 @@ uint8_t Cmd_Set_Switch(void)
     }
     EPT("Set switch channel failed\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed\n");
+    osMutexRelease(swMutex);
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
@@ -257,11 +266,13 @@ uint8_t Cmd_Set_Switch(void)
     Reset_Switch(switch_channel);
     EPT("Set switch channel failed 2\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
+    osMutexRelease(swMutex);
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
     return RESPOND_FAILURE;
   }
 
   Set_Switch_Ready(switch_channel);
+  osMutexRelease(swMutex);
   FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
   return RESPOND_SUCCESS;
 }
@@ -1286,6 +1297,16 @@ uint8_t Cmd_For_Debug()
   }
   
   temp = Buffer_To_BE32(prdata + 4);
+  if (temp == CMD_DEBUG_UNLOCK) {
+    lock_debug = 0;
+    FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 0);
+    return ret;
+  }
+  if (lock_debug) {
+    FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_UNKNOWN_CMD, 0);
+    return RESPOND_UNKNOWN_CMD;
+  }
+
   if (temp == CMD_DEBUG_SW_DAC) {
     memset(resp_buf.buf, 0, 4);
     sw_num = Buffer_To_BE32(prdata + 8);

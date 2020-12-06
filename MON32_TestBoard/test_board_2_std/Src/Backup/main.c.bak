@@ -42,7 +42,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VER "MON32_testboard_1.0.1"
+#define VER "MON32_testboard_1.0.7"
 #define CMD_LENGTH 256
 /* USER CODE END PD */
 
@@ -65,10 +65,11 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t terminal_buf[256];
+uint8_t terminal_buf[2048];
 uint8_t communication_buf[TRANS_MAX_LENGTH];
 uint32_t tim_counter = 0;
 uint32_t tim_counter_max = 1;
+uint32_t tim2_counter = 0;
 
 extern usart_tr_stu *usart1_tr;
 uint8_t uart1_data;
@@ -250,6 +251,7 @@ console_cmd cmdlist[] = {
   {"pd2", cmd_rx_pd_cali, "Get RX PD calibration data", "pd2", "pd2"},
   {"pd1", cmd_tap_pd_cali, "Get TAP PD calibration data", "pd1", "pd1"},
   {"voltage", cmd_voltage, "Get device voltage", "voltage get", "voltage get"},
+  {"loopback", cmd_loopback, "Command about loopback check", "loopback check | status", "loopback check | status"},
   {"alarm", cmd_alarm, "Get alarm", "alarm", "alarm"},
   {"modulation", cmd_modulation, "Command about tosa", "modulation on | off | mode", "modulation on | off | mode"},
   {"status", cmd_device_status, "Get device status", "status", "status"},
@@ -284,6 +286,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       HAL_GPIO_TogglePin(PRO_CTL_GPIO_Port, PRO_CTL_Pin);
       tim_counter = 0;
     }
+  } else if (htim->Instance == TIM2) {
+    tim2_counter++;
   }
 }
 #if 0

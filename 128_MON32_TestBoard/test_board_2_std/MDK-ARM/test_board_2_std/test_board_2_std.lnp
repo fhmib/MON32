@@ -9,6 +9,8 @@
 "test_board_2_std\usart.o"
 "test_board_2_std\stm32f4xx_it.o"
 "test_board_2_std\stm32f4xx_hal_msp.o"
+"test_board_2_std\flash_if.o"
+"test_board_2_std\xmodem.o"
 "test_board_2_std\stm32f4xx_hal_spi.o"
 "test_board_2_std\stm32f4xx_hal_rcc.o"
 "test_board_2_std\stm32f4xx_hal_rcc_ex.o"

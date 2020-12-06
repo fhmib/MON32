@@ -7,6 +7,9 @@
 #include "i2c.h"
 #include "spi.h"
 #include "rtc.h"
+#include "tim.h"
+
+extern osSemaphoreId_t switchSemaphore;
 
 ChannelSwitchMapStruct channel_map[] = {
   {TX_SWITCH_CHANNEL,  1, 11, SWITCH_NUM_1, EE_CAL_SWITCH1, SWITCH_NUM_2, EE_CAL_SWITCH2},
@@ -479,10 +482,14 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
   int32_t pre_index, index;
   uint8_t first_switch, second_switch;
   uint16_t addr;
-  int val_x, val_y;
+  int32_t val_x, val_y;
   osStatus_t status;
   uint8_t pre_pos;
 
+  int32_t old_x, old_y;
+  int32_t tmp_x, tmp_y;
+  int32_t safe_dist = 1000;
+ 
   if (   (switch_channel == TX_SWITCH_CHANNEL && switch_pos >= 66) \
       || (switch_channel == RX_SWITCH_CHANNEL && switch_pos >= 33) \
       || (switch_channel > 1)) {
@@ -504,7 +511,7 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
   } else {
     pre_pos = run_status.rx_switch_channel;
   }
-
+#if 0
   if (pre_pos != 0xFF) {
     pre_index = Get_Index_Of_Channel_Map(switch_channel, pre_pos);
 
@@ -514,6 +521,15 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
       Clear_Switch_Dac(first_switch);
     }
   }
+#else
+  if (pre_pos != 0xFF) {
+    pre_index = Get_Index_Of_Channel_Map(switch_channel, pre_pos);
+    Clear_Switch_Dac(channel_map[pre_index].first_switch);
+    Clear_Switch_Dac(channel_map[pre_index].second_switch);
+  }
+  old_x = 0;
+  old_y = 0;
+#endif
 
   // Configure new switch channel
 
@@ -547,6 +563,7 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
     EPT("Write DAC faliled\n");
     return -4;
   }
+  osDelay(pdMS_TO_TICKS(2));
 
   // first switch
   if (switch_channel == TX_SWITCH_CHANNEL) {
@@ -569,10 +586,47 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
     return -6;
   }
 
-  if (set_sw_dac(first_switch, val_x, val_y)) {
+  if (val_x - old_x >= 0 && val_y - old_y >= 0) {
+    // third quadrant
+    tmp_x = (val_x - old_x >= safe_dist) ? (val_x - safe_dist) : (old_x);
+    tmp_y = (val_y - old_y >= safe_dist) ? (val_y - safe_dist) : (old_y);
+  } else if (val_x - old_x <= 0 && val_y - old_y >= 0) {
+    // fourth quadrant
+    tmp_x = (old_x - val_x >= safe_dist) ? (val_x + safe_dist) : (old_x);
+    tmp_y = (val_y - old_y >= safe_dist) ? (val_y - safe_dist) : (old_y);
+  } else if (val_x - old_x <= 0 && val_y - old_y <= 0) {
+    // first quadrant
+    tmp_x = (old_x - val_x >= safe_dist) ? (val_x + safe_dist) : (old_x);
+    tmp_y = (old_y - val_y >= safe_dist) ? (val_y + safe_dist) : (old_y);
+  } else if (val_x - old_x >= 0 && val_y - old_y <= 0) {
+    // second quadrant
+    tmp_x = (val_x - old_x >= safe_dist) ? (val_x - safe_dist) : (old_x);
+    tmp_y = (old_y - val_y >= safe_dist) ? (val_y + safe_dist) : (old_y);
+  }
+
+
+  if (set_sw_dac(first_switch, tmp_x, tmp_y)) {
     EPT("Write DAC faliled\n");
     return -7;
   }
+    
+  sw_tim_control.time = 3; //300us
+  sw_tim_control.step = 20;
+  sw_tim_control.counter = 0;
+  sw_tim_control.sw_num = first_switch;
+  sw_tim_control.cur_x = tmp_x;
+  sw_tim_control.cur_y = tmp_y;
+  sw_tim_control.dst_x = val_x;
+  sw_tim_control.dst_y = val_y;
+
+  HAL_IWDG_Refresh(&hiwdg);
+  HAL_TIM_Base_Start_IT(&htim6);
+
+  status = osSemaphoreAcquire(switchSemaphore, 30);
+  if (status != osOK) {
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Set Switch Timeout!\n");
+  }
+  osDelay(1);
 
   return 0;
 }
@@ -995,6 +1049,8 @@ void Init_Run_Status(void)
   run_status.uart_reset = 0;
   run_status.tx_switch_channel = 0xFF;
   run_status.rx_switch_channel = 0xFF;
+  run_status.pre_alarm = 0;
+  run_status.pre_exp_value = 0;
   run_status.exp = 0;
   if (HAL_GPIO_ReadPin(SW1_BLOCK_GPIO_Port, SW1_BLOCK_Pin) == GPIO_PIN_RESET) {
     run_status.tx_block = 1;
@@ -2066,7 +2122,7 @@ int8_t set_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y)
       return -1;
     }
     // DAC need 2ms at least
-    osDelay(pdMS_TO_TICKS(4));
+    osDelay(pdMS_TO_TICKS(2));
   } else {
     dac_px_val = (uint16_t)my_abs(val_x);
     for (i = 0; i < 32; ++i) {
@@ -2081,6 +2137,41 @@ int8_t set_sw_dac(uint8_t sw_num, int32_t val_x, int32_t val_y)
   return 0;
 }
 
+void set_sw_dac_2(uint8_t sw_num, int32_t val_x, int32_t val_y)
+{
+  uint32_t i;
+  uint16_t dac_px_val, dac_nx_val, dac_py_val, dac_ny_val;
+
+  for (i = 0; i < sizeof(switch_map)/sizeof(switch_map[0]); ++i) {
+    if (switch_map[i].sw_num == sw_num) {
+      // x
+      if (val_x >= 0) {
+        dac_px_val = (uint16_t)val_x;
+        dac_nx_val = 0;
+      } else {
+        dac_px_val = 0;
+        dac_nx_val = (uint16_t)my_abs(val_x);
+      }
+      // y
+      if (val_y >= 0) {
+        dac_py_val = (uint16_t)val_y;
+        dac_ny_val = 0;
+      } else {
+        dac_py_val = 0;
+        dac_ny_val = (uint16_t)my_abs(val_y);
+      }
+      break;
+    }
+  }
+  // write dac
+  RTOS_DAC5535_Write_Nodelay(switch_map[i].px_chan, dac_px_val);
+  RTOS_DAC5535_Write_Nodelay(switch_map[i].nx_chan, dac_nx_val);
+  RTOS_DAC5535_Write_Nodelay(switch_map[i].py_chan, dac_py_val);
+  RTOS_DAC5535_Write_Nodelay(switch_map[i].ny_chan, dac_ny_val);
+
+  return;
+}
+
 uint8_t debug_sw_adc(uint8_t sw_num)
 {
   uint32_t i;
@@ -2090,7 +2181,7 @@ uint8_t debug_sw_adc(uint8_t sw_num)
   if (sw_num >= SWITCH_NUM_TOTAL || sw_num == 0) {
     return RESPOND_FAILURE;
   }
-  THROW_LOG(MSG_TYPE_NORMAL_LOG, "run_status size is %u\n", sizeof(RunTimeStatus));
+  // THROW_LOG(MSG_TYPE_NORMAL_LOG, "run_status size is %u\n", sizeof(RunTimeStatus));
 
   for (i = 0; i < sizeof(switch_map)/sizeof(switch_map[0]); ++i) {
     if (switch_map[i].sw_num == sw_num)

@@ -350,6 +350,37 @@ osStatus_t RTOS_DAC5535_Write(uint8_t chan, uint16_t val)
   return status;
 }
 
+osStatus_t RTOS_DAC5535_Write_Nodelay(uint8_t chan, uint16_t val)
+{
+  osStatus_t status;
+  uint8_t buf[3];
+
+  if ((status = osMutexAcquire(spi3Mutex, 2)) != osOK) {
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of spi3 failed\n");
+    return status;
+  }
+
+  buf[0] = ((chan & 0x1F) << 3) | ((val >> 11) & 0x7);
+  buf[1] = val >> 3;
+  buf[2] = (val & 0x7) << 5;
+  //EPT("Dac value: %#X %#X %#X\n", buf[0], buf[1], buf[2]);
+  HAL_GPIO_WritePin(SPI3_CS_GPIO_Port, SPI3_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(SPI3_CS_GPIO_Port, SPI3_CS_Pin, GPIO_PIN_RESET);
+  if (HAL_SPI_Transmit(&hspi3, buf, 3, 2) != HAL_OK) {
+    EPT("Write DAC5535 failed, ErrorCode = %#X\n", hspi3.ErrorCode);
+    THROW_LOG(MSG_TYPE_ERROR_LOG, "Write DAC5535 failed, ErrorCode = %#X\n", hspi3.ErrorCode);
+    if (!Is_Flag_Set(&run_status.exp, EXP_DAC)) {
+      THROW_LOG(MSG_TYPE_ERROR_LOG, "DAC5535 abnormal\n");
+      Set_Flag(&run_status.exp, EXP_DAC);
+    }
+    status = osError;
+  }
+
+  osMutexRelease(spi3Mutex);
+
+  return status;
+}
+
 osStatus_t RTOS_DAC128S085_Write(uint8_t chan, uint16_t val, uint8_t mode)
 {
   osStatus_t status;

@@ -70,6 +70,7 @@ osStatus_t RTOS_EEPROM_Read(int16_t dev_addr, uint16_t mem_addr, uint8_t *buf, i
 HAL_StatusTypeDef I2cEepromWrite(int16_t dev_addr, uint16_t mem_addr, uint8_t *buf, int32_t length);
 HAL_StatusTypeDef I2cEepromRead(int16_t dev_addr, uint16_t mem_addr, uint8_t *buf, int32_t length);
 osStatus_t RTOS_DAC5535_Write(uint8_t chan, uint16_t val);
+osStatus_t RTOS_DAC5535_Write_Nodelay(uint8_t chan, uint16_t val);
 osStatus_t RTOS_DAC128S085_Write(uint8_t chan, uint16_t val, uint8_t mode);
 void DAC5541_Write(uint16_t val);
 osStatus_t RTOS_SWITCH_ADC7953_Read(uint8_t chan, uint16_t *val);
@@ -78,19 +79,4 @@ osStatus_t RTOS_ADC7953_SPI5_Read(uint8_t chan, uint16_t *val);
 osStatus_t RTOS_ADC7953_SPI6_Read(uint8_t chan, uint16_t *val);
 osStatus_t RTOS_ADC7828_Read(uint8_t chan, uint16_t *val);
 
-#if 0
-#define THROW_LOG(format, ...) do {\
-                      sprintf((char*)debug_buf, format, ##__VA_ARGS__);\
-                      Throw_Log(debug_buf, strlen((char*)debug_buf));\
-                    } while(0)
-
-uint32_t my_abs(int32_t val);
-uint8_t Is_Value_Approximate(int32_t src, int32_t dst, double factor);
-
-uint16_t UpdateCRC16(uint16_t crc_in, uint8_t byte);
-uint16_t Cal_CRC16(const uint8_t* p_data, uint32_t size);
-
-
-osStatus_t RTOS_ADC7828_Read(uint8_t chan, uint16_t *val);
-#endif
 #endif

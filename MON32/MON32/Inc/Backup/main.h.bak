@@ -65,6 +65,7 @@ extern double tosa_power_low_min_thr;
 
 extern uint8_t device_busy;
 extern uint8_t allow_tosa;
+extern uint8_t enable_tosa_failed;
 
 extern const uint32_t error_file_flash_addr[];
 extern const uint32_t error_file_flash_end;
@@ -73,6 +74,11 @@ extern const uint32_t normal_file_flash_addr[];
 extern const uint32_t normal_file_flash_end;
 extern const uint8_t normal_file_flash_count;
 extern LogFileState log_file_state;
+
+extern uint8_t lock_debug;
+
+extern SwTimControl sw_tim_control;
+//extern double power_arr_for_test[];
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -106,6 +112,7 @@ extern LogFileState log_file_state;
 #define NORMAL_LOG_FIRST_SECTOR          19
 
 #define ISR_QUEUE_LENGTH          6
+#define SW_ISR_QUEUE_LENGTH       2
 
 #define LM_QUEUE_LENGTH           6
 

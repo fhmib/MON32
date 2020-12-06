@@ -81,6 +81,11 @@ LogFileState log_file_state;
 //double power_arr_for_test[10];
 
 RunTimeStatus run_status __attribute__((at(0x2002FC00)));
+
+uint8_t lock_debug = 1;
+
+SwTimControl sw_tim_control;
+MsgStruct tim_isr_msg;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -139,6 +144,7 @@ int main(void)
   MX_TIM8_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   uint8_t buf[3] = {0};
   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
@@ -486,22 +492,11 @@ void MON32_Init_Dev(void)
     }
     DAC5541_Write(run_status.tosa_high.tosa_dac);
   }
-
-  if (Set_Switch(RX_PD_CHANNEL, 0)) {
-    run_status.rx_switch_channel = 0xFF;
-  } else {
-    run_status.rx_switch_channel = 0;
-    // Check
-    if (Get_Current_Switch_Channel(RX_PD_CHANNEL) != 0) {
-      Reset_Switch(RX_PD_CHANNEL);
-    } else {
-      Set_Switch_Ready(RX_PD_CHANNEL);
-    }
-  }
 }
 
 extern FLASH_ProcessTypeDef pFlash;
 extern osMessageQueueId_t mid_ISR;
+extern osMessageQueueId_t mid_SwISR;
 extern osSemaphoreId_t logEraseSemaphore;
 void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 {
@@ -584,7 +579,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if (htim->Instance == TIM6) {
+    if (++sw_tim_control.counter < sw_tim_control.time) {
+    } else {
+      HAL_TIM_Base_Stop_IT(&htim6);
+      tim_isr_msg.type = MSG_TYPE_SWITCH_DAC_ISR;
+      osMessageQueuePut(mid_SwISR, &tim_isr_msg, 0U, 0U);
+      sw_tim_control.counter = 0;
+    }
+  }
   /* USER CODE END Callback 1 */
 }
 

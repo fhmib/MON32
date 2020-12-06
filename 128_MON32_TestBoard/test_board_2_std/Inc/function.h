@@ -96,6 +96,7 @@ typedef enum {
   CMD_DEBUG_CHECK_CALI    = 0x33,
   CMD_DEBUG_CAL_DEF_TEMP  = 0x34,
   CMD_DEBUG_INTER_EXP     = 0xFF,
+  CMD_DEBUG_UNLOCK        = 0x12345678,
 } CmdDebugId;
 
 typedef enum {
@@ -106,6 +107,7 @@ typedef enum {
   FW_FILE_HEADER_LENGTH,
 } FwFileHeader;
 
+int8_t cmd_power(uint8_t argc, char **argv);
 int8_t cmd_get_sn(uint8_t argc, char **argv);
 int8_t cmd_get_date(uint8_t argc, char **argv);
 int8_t cmd_get_pn(uint8_t argc, char **argv);
@@ -129,6 +131,7 @@ int8_t cmd_device_status(uint8_t argc, char **argv);
 int8_t cmd_upgrade(uint8_t argc, char **argv);
 int8_t upgrade_init(void);
 int8_t upgrade_file(uint8_t verify);
+int8_t upgrade_file_xmodem(void);
 int8_t upgrade_install(void);
 int8_t cmd_reset(uint8_t argc, char **argv);
 int8_t cmd_performance(uint8_t argc, char **argv);
@@ -172,6 +175,7 @@ int8_t debug_cmd_log(uint8_t argc, char **argv);
 int8_t debug_log_size(uint8_t argc, char **argv);
 int8_t debug_log_content(uint8_t argc, char **argv);
 int8_t debug_check_cali(void);
+int8_t debug_unlock(void);
 
 int8_t process_command(uint16_t cmd, uint8_t *pdata, uint8_t len, uint8_t *rx_buf, uint8_t *rx_len);
 uint8_t Cal_Check(uint8_t *pdata, uint32_t len);

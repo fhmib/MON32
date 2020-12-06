@@ -7,6 +7,8 @@
 #include "usart.h"
 #include "tim.h"
 #include "spi.h"
+#include "xmodem.h"
+#include "flash_if.h"
 
 uint8_t fw_buf[96 * 1024];
 uint8_t rBuf[TRANS_MAX_LENGTH];
@@ -31,6 +33,21 @@ uint8_t txBuf[TRANS_MAX_LENGTH];
 
 uint32_t block_size = FW_BLOCK_MAX_SIZE;
 
+
+int8_t cmd_power(uint8_t argc, char **argv)
+{
+  if (!strcasecmp(argv[0], "poweron")) {
+    HAL_GPIO_WritePin(OUT_VOL_5_0_GPIO_Port, OUT_VOL_5_0_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(OUT_VOL_3_3_GPIO_Port, OUT_VOL_3_3_Pin, GPIO_PIN_SET);
+  } else if (!strcasecmp(argv[0], "poweroff")) {
+    HAL_GPIO_WritePin(OUT_VOL_5_0_GPIO_Port, OUT_VOL_5_0_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(OUT_VOL_3_3_GPIO_Port, OUT_VOL_3_3_Pin, GPIO_PIN_RESET);
+  } else {
+    cmd_help2(argv[0]);
+  }
+  
+  return 0;
+}
 
 int8_t cmd_get_sn(uint8_t argc, char **argv)
 {
@@ -532,6 +549,8 @@ int8_t cmd_upgrade(uint8_t argc, char **argv)
     return upgrade_file(1);
   } else if (argc == 3 && !strcasecmp(argv[1], "file") && !strcasecmp(argv[2], "no_verify")) {
     return upgrade_file(0);
+  } else if (argc == 3 && !strcasecmp(argv[1], "file") && !strcasecmp(argv[2], "xmodem")) {
+    return upgrade_file_xmodem();
   } else if (argc == 2 && !strcasecmp(argv[1], "run")) {
     return upgrade_install();
   } else {
@@ -605,12 +624,7 @@ int8_t upgrade_file(uint8_t verify)
   send_size = 0;
   while (send_size < fw_length + FW_FILE_HEADER_LENGTH) {
     *(uint16_t*)(&txBuf[0]) = switch_endian_16(seq);
-    /*
-    every_size = send_size + block_size > fw_length + FW_FILE_HEADER_LENGTH ?\
-                 fw_length + FW_FILE_HEADER_LENGTH - send_size : block_size ;
-    *(uint32_t*)(&txBuf[4]) = switch_endian(every_size);
-    */
-    //PRINT2("send_size = %u\r\n", send_size);
+
     if (send_size + every_size > fw_length + FW_FILE_HEADER_LENGTH) {
       memset(&txBuf[2], 0, every_size);
       memcpy(&txBuf[2], &fw_buf[send_size], fw_length + FW_FILE_HEADER_LENGTH - send_size);
@@ -639,6 +653,56 @@ int8_t upgrade_file(uint8_t verify)
   uart1_irq_sel = 1;
 
   return ret;
+}
+
+int8_t upgrade_file_xmodem(void)
+{
+  uint8_t ret;
+  uint32_t fw_length, every_size = FW_BLOCK_MAX_SIZE, send_size = 0;
+  uint16_t seq = 1;
+  uint8_t retry = 0;
+
+  PRINT("Erasing falsh");
+  HAL_Delay(10);
+  FLASH_If_Erase(FLASH_SECTOR_17);
+  PRINT(".");
+  HAL_Delay(10);
+  FLASH_If_Erase(FLASH_SECTOR_18);
+  PRINT(".");
+  HAL_Delay(10);
+  FLASH_If_Erase(FLASH_SECTOR_19);
+  PRINT("Done.\r\n");
+  PRINT("Download image...\r\n");
+  ret = xmodem_receive(&fw_length);
+  if (ret) {
+    PRINT("xmodem failed, ret = %u\r\n", ret);
+    return 0;
+  }
+  PRINT("Download success, Size = %u(%#X))\r\n", fw_length, fw_length);
+  PRINT("\r\nSending image...\r\n");
+  while (send_size < fw_length) {
+    *(uint16_t*)(&txBuf[0]) = switch_endian_16(seq);
+
+    if (send_size + every_size > fw_length) {
+      memset(&txBuf[2], 0, every_size);
+      memcpy(&txBuf[2], (uint8_t*)(IMAGE_ADDRESS + send_size), fw_length - send_size);
+    } else {
+      memcpy(&txBuf[2], (uint8_t*)(IMAGE_ADDRESS + send_size), every_size);
+    }
+    ret = process_command(CMD_UPGRADE_DATA, txBuf, 2 + every_size, rBuf, &rLen);
+    if (ret) {
+      if (retry < 3) {
+        PRINT2("Retry, seq = %u\r\n", seq);
+        retry++;
+        continue;
+      }
+      break;
+    }
+    seq++;
+    send_size += every_size;
+  }
+
+  return 0;
 }
 
 int8_t upgrade_install()
@@ -945,6 +1009,8 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     PRINT("CRC32_2 : %#X\r\n", crc);
 
     return 0;
+  } else if (argc == 2 && !strcasecmp(argv[1], "unlock")) {
+    return debug_unlock();
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1881,7 +1947,7 @@ int8_t debug_set_sw_adc(uint8_t argc, char **argv)
   double d_val;
 
   value = strtoul(argv[2], NULL, 10);
-  d_val = atof(argv[4]);
+  d_val = atof(argv[3]);
 
   BE32_To_Buffer(0x5A5AA5A5, txBuf);
   BE32_To_Buffer(CMD_DEBUG_SET_SW_ADC, txBuf + 4);
@@ -2141,6 +2207,20 @@ int8_t debug_check_cali(void)
   }
   
   PRINT("CRC32 : %#X\r\n", Buffer_To_BE32(rBuf + CMD_SEQ_MSG_DATA));
+
+  return ret;
+}
+
+int8_t debug_unlock(void)
+{
+  int8_t ret;
+
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_UNLOCK, txBuf + 4);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 8, rBuf, &rLen);
+   if (ret) {
+    return ret;
+  }
 
   return ret;
 }
