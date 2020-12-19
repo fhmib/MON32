@@ -905,7 +905,7 @@ int32_t Get_Index_Of_Channel_Map(uint8_t switch_channel, uint8_t switch_pos)
   if (switch_channel == TX_SWITCH_CHANNEL) {
     if (switch_pos < 64) {
       act_pos = (switch_pos % 32) + 1;
-    } else if (switch_channel < 66) {
+    } else if (switch_pos < 66) {
       act_pos = 33;
     } else {
       act_pos = 0xFF;
@@ -951,6 +951,11 @@ void Reset_Switch(uint8_t switch_channel)
     }
 
     if (pos != 0xFF) {
+      if (switch_channel == TX_SWITCH_CHANNEL) {
+        Clear_Switch_Ready(TX_SWITCH_CHANNEL);
+      } else {
+        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
+      }
       index = Get_Index_Of_Channel_Map(switch_channel, pos);
       Clear_Switch_Dac(channel_map[index].first_switch);
       Clear_Switch_Dac(channel_map[index].second_switch);
@@ -958,12 +963,12 @@ void Reset_Switch(uint8_t switch_channel)
 
     if (switch_channel == TX_SWITCH_CHANNEL) {
       run_status.tx_switch_channel = 0xFF;
-      Clear_Switch_Ready(TX_SWITCH_CHANNEL);
     } else {
       run_status.rx_switch_channel = 0xFF;
-      Clear_Switch_Ready(RX_SWITCH_CHANNEL);
     }
   } else {
+    Clear_Switch_Ready(TX_SWITCH_CHANNEL);
+    Clear_Switch_Ready(RX_SWITCH_CHANNEL);
     Clear_Switch_Dac(SWITCH_NUM_1);
     Clear_Switch_Dac(SWITCH_NUM_2);
     Clear_Switch_Dac(SWITCH_NUM_3);
@@ -974,8 +979,6 @@ void Reset_Switch(uint8_t switch_channel)
     Clear_Switch_Dac(SWITCH_NUM_8);
     run_status.tx_switch_channel = 0xFF;
     run_status.rx_switch_channel = 0xFF;
-    Clear_Switch_Ready(TX_SWITCH_CHANNEL);
-    Clear_Switch_Ready(RX_SWITCH_CHANNEL);
   }
 }
 
@@ -1062,12 +1065,12 @@ void Init_Run_Status(void)
   run_status.modulation = 0;
   run_status.tosa_enable = 0;
   run_status.lazer_ready = 0;
-  run_status.tosa_dst_power_high = 0;
-  run_status.tosa_dst_power_low = -4;
+  run_status.tosa_dst_power_high = 2;
+  run_status.tosa_dst_power_low = -2;
   run_status.allow_monitor = 0;
   run_status.power_mode = 1;
 
-  run_status.osc_status = OSC_FAILURE;
+  run_status.osc_status = 0xFF;
   run_status.sw_adc_int = 200;
   run_status.sw_adc_double = 0.05;
 }
@@ -2605,6 +2608,7 @@ uint8_t debug_set_tosa(uint16_t low, uint16_t high)
   run_status.tosa_low.tosa_dac = low;
   run_status.tosa_high.tosa_dac = high;
 
+  DAC5541_Write(high);
   return RESPOND_SUCCESS;
 }
 
@@ -2701,7 +2705,6 @@ uint8_t debug_get_pd(uint32_t which)
 
 uint8_t debug_set_lp(uint32_t which)
 {
-  uint8_t ret;
   uint8_t switch_channel, switch_pos;
 
   if (which == 0) {
@@ -2714,10 +2717,6 @@ uint8_t debug_set_lp(uint32_t which)
     switch_channel = RX_SWITCH_CHANNEL;
     switch_pos = 32;
   } else {
-    return RESPOND_FAILURE;
-  }
-
-  if (ret) {
     return RESPOND_FAILURE;
   }
 

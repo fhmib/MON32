@@ -1,0 +1,1 @@
+test_board_2_std\startup_stm32f427xx.o: startup_stm32f427xx.s

@@ -3,7 +3,7 @@
 <title>Static Call Graph - [MON32\MON32.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image MON32\MON32.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Sun Dec 06 21:04:28 2020
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Sat Dec 19 14:44:12 2020
 <BR><P>
 <H3>Maximum Stack Usage =        576 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -549,7 +549,6 @@ Global Symbols
 <LI><a href="#[ee]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Process
 <LI><a href="#[7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Get_Switch
 <LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
-<LI><a href="#[133]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_Callback
 <LI><a href="#[b3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Tap_Power
 <LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cali_Power
 <LI><a href="#[85]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;uartProcessTask
@@ -1268,7 +1267,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> command.o(.data)
 </UL>
-<P><STRONG><a name="[6]"></a>Cmd_Set_Switch</STRONG> (Thumb, 332 bytes, Stack size 40 bytes, command.o(i.Cmd_Set_Switch))
+<P><STRONG><a name="[6]"></a>Cmd_Set_Switch</STRONG> (Thumb, 334 bytes, Stack size 40 bytes, command.o(i.Cmd_Set_Switch))
 <BR><BR>[Stack]<UL><LI>Max Depth = 424<LI>Call Chain = Cmd_Set_Switch &rArr; Get_Current_Switch_Channel &rArr; Get_Switch_Adc &rArr; RTOS_SWITCH_ADC7953_Read &rArr; RTOS_ADC7953_SPI6_Read &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[f8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMutexRelease
@@ -1327,7 +1326,7 @@ Global Symbols
 <P><STRONG><a name="[13]"></a>Cmd_Upgrade_Init</STRONG> (Thumb, 30 bytes, Stack size 0 bytes, command.o(i.Cmd_Upgrade_Init))
 <BR>[Address Reference Count : 1]<UL><LI> command.o(.data)
 </UL>
-<P><STRONG><a name="[15]"></a>Cmd_Upgrade_Install</STRONG> (Thumb, 224 bytes, Stack size 24 bytes, command.o(i.Cmd_Upgrade_Install))
+<P><STRONG><a name="[15]"></a>Cmd_Upgrade_Install</STRONG> (Thumb, 228 bytes, Stack size 24 bytes, command.o(i.Cmd_Upgrade_Install))
 <BR><BR>[Stack]<UL><LI>Max Depth = 296<LI>Call Chain = Cmd_Upgrade_Install &rArr; Update_Up_Status &rArr; RTOS_EEPROM_Write &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[100]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Update_Up_Status
@@ -1364,7 +1363,8 @@ Global Symbols
 <LI><a href="#[b4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
 <LI><a href="#[b5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;strlen
 </UL>
-<BR>[Called By]<UL><LI><a href="#[192]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init_Dev
+<BR>[Called By]<UL><LI><a href="#[dd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;debug_set_tosa
+<LI><a href="#[192]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init_Dev
 <LI><a href="#[162]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_IC_CaptureCallback
 <LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cali_Power
 <LI><a href="#[8c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;lazerManagerTask
@@ -1391,21 +1391,21 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[2b]"></a>EXTI0_IRQHandler</STRONG> (Thumb, 6 bytes, Stack size 0 bytes, stm32f4xx_it.o(i.EXTI0_IRQHandler))
-<BR><BR>[Stack]<UL><LI>Max Depth = 240<LI>Call Chain = EXTI0_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<BR><BR>[Stack]<UL><LI>Max Depth = 168<LI>Call Chain = EXTI0_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[106]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_IRQHandler
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f427xx.o(RESET)
 </UL>
 <P><STRONG><a name="[4d]"></a>EXTI15_10_IRQHandler</STRONG> (Thumb, 8 bytes, Stack size 0 bytes, stm32f4xx_it.o(i.EXTI15_10_IRQHandler))
-<BR><BR>[Stack]<UL><LI>Max Depth = 240<LI>Call Chain = EXTI15_10_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<BR><BR>[Stack]<UL><LI>Max Depth = 168<LI>Call Chain = EXTI15_10_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[106]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_IRQHandler
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f427xx.o(RESET)
 </UL>
 <P><STRONG><a name="[2c]"></a>EXTI1_IRQHandler</STRONG> (Thumb, 6 bytes, Stack size 0 bytes, stm32f4xx_it.o(i.EXTI1_IRQHandler))
-<BR><BR>[Stack]<UL><LI>Max Depth = 240<LI>Call Chain = EXTI1_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<BR><BR>[Stack]<UL><LI>Max Depth = 168<LI>Call Chain = EXTI1_IRQHandler &rArr; HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[106]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_IRQHandler
 </UL>
@@ -1535,7 +1535,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
 </UL>
 
-<P><STRONG><a name="[113]"></a>Get_Index_Of_Channel_Map</STRONG> (Thumb, 88 bytes, Stack size 16 bytes, functions.o(i.Get_Index_Of_Channel_Map))
+<P><STRONG><a name="[113]"></a>Get_Index_Of_Channel_Map</STRONG> (Thumb, 92 bytes, Stack size 16 bytes, functions.o(i.Get_Index_Of_Channel_Map))
 <BR><BR>[Stack]<UL><LI>Max Depth = 16<LI>Call Chain = Get_Index_Of_Channel_Map
 </UL>
 <BR>[Called By]<UL><LI><a href="#[f6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Switch
@@ -1767,20 +1767,17 @@ Global Symbols
 <LI><a href="#[10b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;FLASH_If_Init
 </UL>
 
-<P><STRONG><a name="[133]"></a>HAL_GPIO_EXTI_Callback</STRONG> (Thumb, 126 bytes, Stack size 24 bytes, main.o(i.HAL_GPIO_EXTI_Callback))
-<BR><BR>[Stack]<UL><LI>Max Depth = 232<LI>Call Chain = HAL_GPIO_EXTI_Callback &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<P><STRONG><a name="[133]"></a>HAL_GPIO_EXTI_Callback</STRONG> (Thumb, 94 bytes, Stack size 24 bytes, main.o(i.HAL_GPIO_EXTI_Callback))
+<BR><BR>[Stack]<UL><LI>Max Depth = 160<LI>Call Chain = HAL_GPIO_EXTI_Callback &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
-<LI><a href="#[b6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Throw_Log
 <LI><a href="#[f4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_ReadPin
-<LI><a href="#[b4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
-<LI><a href="#[b5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;strlen
 </UL>
 <BR>[Called By]<UL><LI><a href="#[106]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_IRQHandler
 </UL>
 
 <P><STRONG><a name="[106]"></a>HAL_GPIO_EXTI_IRQHandler</STRONG> (Thumb, 18 bytes, Stack size 8 bytes, stm32f4xx_hal_gpio.o(i.HAL_GPIO_EXTI_IRQHandler))
-<BR><BR>[Stack]<UL><LI>Max Depth = 240<LI>Call Chain = HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<BR><BR>[Stack]<UL><LI>Max Depth = 168<LI>Call Chain = HAL_GPIO_EXTI_IRQHandler &rArr; HAL_GPIO_EXTI_Callback &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[133]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_Callback
 </UL>
@@ -2935,7 +2932,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
 </UL>
 
-<P><STRONG><a name="[f7]"></a>Reset_Switch</STRONG> (Thumb, 146 bytes, Stack size 24 bytes, functions.o(i.Reset_Switch))
+<P><STRONG><a name="[f7]"></a>Reset_Switch</STRONG> (Thumb, 156 bytes, Stack size 24 bytes, functions.o(i.Reset_Switch))
 <BR><BR>[Stack]<UL><LI>Max Depth = 296<LI>Call Chain = Reset_Switch &rArr; Clear_Switch_Dac &rArr; set_sw_dac &rArr; RTOS_DAC5535_Write &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Clear_Switch_Ready
@@ -2956,6 +2953,7 @@ Global Symbols
 </UL>
 <BR>[Called By]<UL><LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
 <LI><a href="#[8b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;monitorTask
+<LI><a href="#[88]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;isrTask
 </UL>
 
 <P><STRONG><a name="[194]"></a>Reset_Tec_Dest_Temp</STRONG> (Thumb, 166 bytes, Stack size 40 bytes, functions.o(i.Reset_Tec_Dest_Temp))
@@ -3181,7 +3179,6 @@ Global Symbols
 <LI><a href="#[ee]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Process
 <LI><a href="#[7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Get_Switch
 <LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
-<LI><a href="#[133]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_Callback
 <LI><a href="#[b3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Tap_Power
 <LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cali_Power
 <LI><a href="#[85]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;uartProcessTask
@@ -3308,7 +3305,6 @@ Global Symbols
 <LI><a href="#[ee]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Process
 <LI><a href="#[7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Get_Switch
 <LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
-<LI><a href="#[133]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_EXTI_Callback
 <LI><a href="#[b3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Tap_Power
 <LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cali_Power
 <LI><a href="#[85]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;uartProcessTask
@@ -3605,7 +3601,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
 </UL>
 
-<P><STRONG><a name="[e1]"></a>debug_set_lp</STRONG> (Thumb, 104 bytes, Stack size 16 bytes, functions.o(i.debug_set_lp))
+<P><STRONG><a name="[e1]"></a>debug_set_lp</STRONG> (Thumb, 102 bytes, Stack size 16 bytes, functions.o(i.debug_set_lp))
 <BR><BR>[Stack]<UL><LI>Max Depth = 400<LI>Call Chain = debug_set_lp &rArr; Get_Current_Switch_Channel &rArr; Get_Switch_Adc &rArr; RTOS_SWITCH_ADC7953_Read &rArr; RTOS_ADC7953_SPI6_Read &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[f9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Switch_Ready
@@ -3625,8 +3621,12 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
 </UL>
 
-<P><STRONG><a name="[dd]"></a>debug_set_tosa</STRONG> (Thumb, 10 bytes, Stack size 0 bytes, functions.o(i.debug_set_tosa))
-<BR><BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
+<P><STRONG><a name="[dd]"></a>debug_set_tosa</STRONG> (Thumb, 20 bytes, Stack size 8 bytes, functions.o(i.debug_set_tosa))
+<BR><BR>[Stack]<UL><LI>Max Depth = 232<LI>Call Chain = debug_set_tosa &rArr; DAC5541_Write &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+</UL>
+<BR>[Calls]<UL><LI><a href="#[be]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;DAC5541_Write
+</UL>
+<BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
 </UL>
 
 <P><STRONG><a name="[ce]"></a>debug_sw_adc</STRONG> (Thumb, 128 bytes, Stack size 40 bytes, functions.o(i.debug_sw_adc))
@@ -3723,7 +3723,7 @@ Global Symbols
 <LI><a href="#[8b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;monitorTask
 </UL>
 
-<P><STRONG><a name="[88]"></a>isrTask</STRONG> (Thumb, 526 bytes, Stack size 16 bytes, freertos.o(i.isrTask))
+<P><STRONG><a name="[88]"></a>isrTask</STRONG> (Thumb, 622 bytes, Stack size 16 bytes, freertos.o(i.isrTask))
 <BR><BR>[Stack]<UL><LI>Max Depth = 480<LI>Call Chain = isrTask &rArr; MON32_Init &rArr; MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[f8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMutexRelease
@@ -3737,6 +3737,7 @@ Global Symbols
 <LI><a href="#[ea]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Current_Switch_Channel
 <LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Clear_Switch_Ready
 <LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
+<LI><a href="#[191]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Reset_Switch_Only
 <LI><a href="#[121]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Switch_Position_By_IO
 <LI><a href="#[1ce]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueueGet
 <LI><a href="#[b4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
@@ -3744,7 +3745,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> freertos.o(i.MX_FREERTOS_Init)
 </UL>
-<P><STRONG><a name="[8c]"></a>lazerManagerTask</STRONG> (Thumb, 1742 bytes, Stack size 96 bytes, freertos.o(i.lazerManagerTask))
+<P><STRONG><a name="[8c]"></a>lazerManagerTask</STRONG> (Thumb, 1658 bytes, Stack size 96 bytes, freertos.o(i.lazerManagerTask))
 <BR><BR>[Stack]<UL><LI>Max Depth = 576<LI>Call Chain = lazerManagerTask &rArr; Cali_Power &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[b7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Flag
@@ -3752,7 +3753,6 @@ Global Symbols
 <LI><a href="#[bd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RTOS_DAC128S085_Write
 <LI><a href="#[be]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;DAC5541_Write
 <LI><a href="#[11e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buffer_To_BE16
-<LI><a href="#[f5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMutexAcquire
 <LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
 <LI><a href="#[bf]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay
 <LI><a href="#[a2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_dsub
@@ -3828,7 +3828,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> entry9a.o(.ARM.Collect$$$$0000000B)
 </UL>
-<P><STRONG><a name="[8b]"></a>monitorTask</STRONG> (Thumb, 3430 bytes, Stack size 96 bytes, freertos.o(i.monitorTask))
+<P><STRONG><a name="[8b]"></a>monitorTask</STRONG> (Thumb, 3450 bytes, Stack size 96 bytes, freertos.o(i.monitorTask))
 <BR><BR>[Stack]<UL><LI>Max Depth = 480<LI>Call Chain = monitorTask &rArr; Get_Current_Switch_Channel &rArr; Get_Switch_Adc &rArr; RTOS_SWITCH_ADC7953_Read &rArr; RTOS_ADC7953_SPI6_Read &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[b7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Flag
@@ -3978,7 +3978,6 @@ Global Symbols
 <LI><a href="#[c2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RTOS_EEPROM_Read
 <LI><a href="#[eb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RTOS_ADC7828_Read
 <LI><a href="#[6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Set_Switch
-<LI><a href="#[8c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;lazerManagerTask
 <LI><a href="#[88]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;isrTask
 </UL>
 

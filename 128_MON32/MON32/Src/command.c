@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S1.2"; // 4 bytes
+char *fw_version = "S1.3"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -228,10 +228,10 @@ uint8_t Cmd_Set_Switch(void)
   }
   
   if (run_status.tx_block && switch_channel == TX_SWITCH_CHANNEL) {
-    EPT("Switch is blocked\n");
-    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked\n\n");
-    FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_FAILURE, 0);
-    return RESPOND_FAILURE;
+    //THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked\n\n");
+    run_status.tx_switch_channel = switch_pos;
+    FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
+    return RESPOND_SUCCESS;
   }
 
   if (osMutexAcquire(swMutex, 50) != osOK) {
@@ -829,6 +829,7 @@ uint8_t Cmd_Upgrade_Install()
 
   THROW_LOG(MSG_TYPE_NORMAL_LOG, "Upgrade firmware success\n");
   Uart_Respond(CMD_UPGRADE_RUN, RESPOND_SUCCESS, NULL, 0);
+  run_status.uart_reset = 1;
   __NVIC_SystemReset();
   while (1) {
   }

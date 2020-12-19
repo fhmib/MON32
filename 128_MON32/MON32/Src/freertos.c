@@ -499,6 +499,11 @@ void isrTask(void *argument)
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Invalid switch position = %u [io]\n", switch_pos);
         continue;
       }
+      
+      if (run_status.tx_block) {
+        run_status.tx_switch_channel = switch_pos;
+        continue;
+      }
 
       if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
@@ -566,12 +571,21 @@ void isrTask(void *argument)
       if (run_status.osc_status == OSC_ONGOING) {
         msg.type = MSG_TYPE_SELF_TEST_STEP_2;
         msg.pbuf = NULL;
+
+        if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+          run_status.osc_status = OSC_FAILURE;
+          osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
+          continue;
+        }
+
         // Switch Loopback
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (Set_Switch(TX_SWITCH_CHANNEL, 64)) {
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
+          osMutexRelease(swMutex);
           osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
@@ -580,6 +594,7 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 64) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
+          osMutexRelease(swMutex);
           osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
@@ -589,6 +604,7 @@ void isrTask(void *argument)
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
           run_status.osc_status = OSC_FAILURE;
+          osMutexRelease(swMutex);
           osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
@@ -597,27 +613,39 @@ void isrTask(void *argument)
         if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 32) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
           run_status.osc_status = OSC_FAILURE;
+          osMutexRelease(swMutex);
           osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
           continue;
         }
 
+        osMutexRelease(swMutex);
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
       } else if (run_status.osc_status == OSC_SUCCESS) {
+        if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+          continue;
+        }
+
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
-        if (Set_Switch(TX_SWITCH_CHANNEL, 0)) {
-          run_status.tx_switch_channel = 0xFF;
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
-          osMutexRelease(swMutex);
-          continue;
+        if (run_status.tx_block) {
+          Reset_Switch_Only(TX_SWITCH_CHANNEL);
+          run_status.tx_switch_channel = 0;
+        } else {
+          if (Set_Switch(TX_SWITCH_CHANNEL, 0)) {
+            run_status.tx_switch_channel = 0xFF;
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
+            osMutexRelease(swMutex);
+            continue;
+          }
+          run_status.tx_switch_channel = 0;
+          // Check
+          if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 0) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
+            osMutexRelease(swMutex);
+            continue;
+          }
+          Set_Switch_Ready(TX_SWITCH_CHANNEL);
         }
-        run_status.tx_switch_channel = 0;
-        // Check
-        if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != 0) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
-          osMutexRelease(swMutex);
-          continue;
-        }
-        Set_Switch_Ready(TX_SWITCH_CHANNEL);
 
         Clear_Switch_Ready(RX_SWITCH_CHANNEL);
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
@@ -636,6 +664,13 @@ void isrTask(void *argument)
         Set_Switch_Ready(RX_SWITCH_CHANNEL);
         osMutexRelease(swMutex);
       } else if (run_status.osc_status == OSC_FAILURE) {
+        if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+          continue;
+        }
+
+        Reset_Switch(TX_SWITCH_CHANNEL);
+
         Clear_Switch_Ready(RX_SWITCH_CHANNEL);
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
@@ -865,15 +900,17 @@ void monitorTask(void *argument)
 
   osDelay(pdMS_TO_TICKS(500));
 
-  if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
-    run_status.rx_switch_channel = 0xFF;
-  }
-  run_status.rx_switch_channel = 0;
-  // Check
-  if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
-    Reset_Switch(RX_SWITCH_CHANNEL);
-  } else {
-    Set_Switch_Ready(RX_SWITCH_CHANNEL);
+  if (!(IS_RESETFLAG_SET(SFT_RESET_BIT) || IS_RESETFLAG_SET(IWDG_RESET_BIT))) {
+    if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
+      run_status.rx_switch_channel = 0xFF;
+    }
+    run_status.rx_switch_channel = 0;
+    // Check
+    if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
+      Reset_Switch(RX_SWITCH_CHANNEL);
+    } else {
+      Set_Switch_Ready(RX_SWITCH_CHANNEL);
+    }
   }
 
   device_busy = 0;
@@ -890,14 +927,14 @@ void monitorTask(void *argument)
       if (run_status.tx_block) {
         if (run_status.tx_switch_channel != 0xFF) {
           if (Set_Switch(TX_SWITCH_CHANNEL, run_status.tx_switch_channel)) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
             run_status.tx_switch_channel = 0xFF;
             continue;
           }
 
-          osDelay(pdMS_TO_TICKS(4));
-
           // Check
           if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != run_status.tx_switch_channel) {
+            THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
             Reset_Switch(TX_SWITCH_CHANNEL);
             continue;
           } else {
@@ -1354,11 +1391,6 @@ void lazerManagerTask(void *argument)
         Clear_Flag(&run_status.exp, EXP_SWITCH);
       }
   
-      if (osMutexAcquire(swMutex, 50) != osOK) {
-        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed when selfcheck\n");
-        continue;
-      }
-
       run_status.osc_status = OSC_ONGOING;
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH;
       msg.pbuf = NULL;

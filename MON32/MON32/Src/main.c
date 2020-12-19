@@ -539,13 +539,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   if (GPIO_Pin == SW1_STROBE_Pin) {
     if (HAL_GPIO_ReadPin(SW1_MODE_SEL_GPIO_Port, SW1_MODE_SEL_Pin) == GPIO_PIN_SET) {
     } else {
-      if (run_status.tx_block) {
-        EPT("Switch is blocked\n");
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Detected 2x32 switch strobe signal but it is blocked\n");
-      } else {
-        isr_msg.type = MSG_TYPE_SWITCH1_ISR;
-        osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);
-      }
+      isr_msg.type = MSG_TYPE_SWITCH1_ISR;
+      osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);
     }
   } else if (GPIO_Pin == SW2_STROBE_Pin) {
     if (HAL_GPIO_ReadPin(SW2_MODE_SEL_GPIO_Port, SW2_MODE_SEL_Pin) == GPIO_PIN_SET) {
