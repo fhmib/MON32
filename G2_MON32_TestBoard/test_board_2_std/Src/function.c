@@ -509,8 +509,10 @@ int8_t get_loopback_status(void)
   if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
     PRINT("Loopback check success\r\n");
   } else if (rBuf[CMD_SEQ_MSG_DATA] == 1) {
-    PRINT("Loopback check failed\r\n");
+    PRINT("C98 Loopback check failed\r\n");
   } else if (rBuf[CMD_SEQ_MSG_DATA] == 2) {
+    PRINT("C122 Loopback check failed\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 3) {
     PRINT("Loopback check ongoing\r\n");
   } else {
   }
@@ -870,16 +872,20 @@ int8_t cmd_performance(uint8_t argc, char **argv)
   double d_val;
 
   if (argc == 2 && !strcasecmp(argv[1], "all")) {
-    for (i = 0; i <= 0x12; ++i) {
+    for (i = 0; i <= 0x13; ++i) {
       txBuf[i] = i;
     }
-    ret = process_command(CMD_QUERY_PERFORMANCE, txBuf, 0x12 + 1, rBuf, &rLen);
+    ret = process_command(CMD_QUERY_PERFORMANCE, txBuf, 0x13 + 1, rBuf, &rLen);
+  } else if ((argc == 2 && !strcasecmp(argv[1], "help")) || argc == 1) {
+    cmd_help2(argv[0]);
+    return 0;
   } else {
     for (i = 0; i < argc - 1; ++i) {
       txBuf[i] = (uint8_t)strtoul(argv[i + 1], NULL, 0);
     }
     ret = process_command(CMD_QUERY_PERFORMANCE, txBuf, argc - 1, rBuf, &rLen);
   }
+
   if (ret) {
     return ret;
   }
@@ -976,6 +982,10 @@ int8_t cmd_performance(uint8_t argc, char **argv)
         val32 = (int32_t)Buffer_To_BE32(p + 1);
         d_val = (double)val32 / 100;
         PRINT("RX 1x32 Current chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
+        break;
+      case 0x13:
+        u_val32 = Buffer_To_BE32(p + 1);
+        PRINT("Wavelength mode : %d(%#X)\r\n", u_val32, u_val32);
         break;
       default:
         PRINT("Unknown performance id %u\r\n", *p);
@@ -1503,13 +1513,22 @@ int8_t debug_cal(uint8_t argc, char **argv)
     BE32_To_Buffer(u_val, txBuf + 12);
     BE32_To_Buffer(val_x, txBuf + 16);
     ret = process_command(CMD_FOR_DEBUG, txBuf, 20, rBuf, &rLen);
-  } else if (argc == 4 && !strcasecmp(argv[2], "tec_temp")) {
+  } else if (argc == 4 && !strcasecmp(argv[2], "tec_temp_c98")) {
     sscanf(argv[3], "%lf", &d_val);
     val_x = (int32_t)(d_val * 10);
     BE32_To_Buffer(0x5A5AA5A5, txBuf);
     BE32_To_Buffer(CMD_DEBUG_CAL_DEF_TEMP, txBuf + 4);
-    BE32_To_Buffer(val_x, txBuf + 8);
-    ret = process_command(CMD_FOR_DEBUG, txBuf, 12, rBuf, &rLen);
+    BE32_To_Buffer(0, txBuf + 8);
+    BE32_To_Buffer(val_x, txBuf + 12);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 16, rBuf, &rLen);
+  } else if (argc == 4 && !strcasecmp(argv[2], "tec_temp_c122")) {
+    sscanf(argv[3], "%lf", &d_val);
+    val_x = (int32_t)(d_val * 10);
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_CAL_DEF_TEMP, txBuf + 4);
+    BE32_To_Buffer(1, txBuf + 8);
+    BE32_To_Buffer(val_x, txBuf + 12);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 16, rBuf, &rLen);
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1573,7 +1592,7 @@ int8_t debug_dump(uint8_t argc, char **argv)
       return 1;
     }
     if (which == 1) count = 6;
-    else if (which == 5) count = 3;
+    else if (which == 5) count = 6;
     else count = 11;
   } else if (!strcasecmp(argv[2], "tosa_C98")) {
     which = 10;
@@ -1585,7 +1604,7 @@ int8_t debug_dump(uint8_t argc, char **argv)
     count = 10;
   } else if (!strcasecmp(argv[2], "tec_temp")) {
     which = 16;
-    count = 1;
+    count = 2;
   } else if (!strcasecmp(argv[2], "tosa_C122")) {
     which = 17;
     count = 10;
@@ -1657,7 +1676,22 @@ int8_t debug_dump(uint8_t argc, char **argv)
     if (ret) {
       return ret;
     }
-    PRINT("rx 1x32 Insertion Loss:\r\n");
+    PRINT("rx C98 Insertion Loss:\r\n");
+    for (i = 0; i < 32; ++i) {
+      val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 4]);
+      d_val = (double)val_x / 100;
+      PRINT("%u,%.2lf\r\n", i + 1, d_val);
+    }
+
+    which = 19;
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_DUMP, txBuf + 4);
+    BE32_To_Buffer(which, txBuf + 8);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 12, rBuf, &rLen);
+    if (ret) {
+      return ret;
+    }
+    PRINT("rx C122 Insertion Loss:\r\n");
     for (i = 0; i < 32; ++i) {
       val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 4]);
       d_val = (double)val_x / 100;
@@ -1702,7 +1736,10 @@ int8_t debug_dump(uint8_t argc, char **argv)
   } else if (which == 16) {
     val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
     d_val = (double)val_x / 10;
-    PRINT("TEC_TEMP: %.1lf\r\n", d_val);
+    PRINT("TEC_TEMP_C98: %.1lf\r\n", d_val);
+    val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 4]);
+    d_val = (double)val_x / 10;
+    PRINT("TEC_TEMP_C122: %.1lf\r\n", d_val);
   }
 
   return ret;
@@ -1765,9 +1802,9 @@ int8_t debug_monitor(uint8_t argc, char **argv)
   state = HAL_GPIO_ReadPin(SW2_READY_GPIO_Port, SW2_READY_Pin);
   PRINT("RX Switch Ready signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
   state = HAL_GPIO_ReadPin(L_READY_GPIO_Port, L_READY_Pin);
-  PRINT("L_Ready signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
+  PRINT("C98 L_Ready signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
   state = HAL_GPIO_ReadPin(L_READY_2_GPIO_Port, L_READY_2_Pin);
-  PRINT("L_Ready_2 signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
+  PRINT("C122 L_Ready_2 signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
 
   return 0;
 }
@@ -1805,7 +1842,7 @@ int8_t debug_pin(uint8_t argc, char **argv)
     type = 4;
   } else if (!strcasecmp(argv[2], "test_block")) {
     type = 5;
-  } else if (!strcasecmp(argv[2], "pro")) {
+  } else if (!strcasecmp(argv[2], "pro1")) {
     port = PRO_CTL_GPIO_Port;
     pin = PRO_CTL_Pin;
   } else if (!strcasecmp(argv[2], "pro2")) {
@@ -2222,6 +2259,8 @@ int8_t debug_set_lp(uint8_t argc, char **argv)
     which = 1;
   } else if (value == 3) {
     which = 2;
+  } else if (value == 4) {
+    which = 3;
   } else {
     cmd_help2(argv[0]);
     return 0; 
@@ -2269,9 +2308,13 @@ int8_t debug_get_switch_channel()
     return ret;
   }
   if (rBuf[CMD_SEQ_MSG_DATA + 1] < 32) {
-    PRINT("RX channel is %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
-  } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 33) {
-    PRINT("RX channel is 33\r\n");
+    PRINT("RX channel is %u(C98)\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
+  } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 64) {
+    PRINT("RX channel is %u(C122)\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1 - 32);
+  } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 65) {
+    PRINT("RX channel is 33(C98)\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 66) {
+    PRINT("RX channel is 33(C122)\r\n");
   } else {
     PRINT("Invalid RX channel\r\n");
   }

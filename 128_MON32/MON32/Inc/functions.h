@@ -398,4 +398,6 @@ uint8_t debug_Cmd_LOG_Content(uint8_t *buf, uint32_t *rLen);
 uint8_t debug_Cmd_Query_Alarm_History(void);
 uint8_t debug_Cmd_Check_Cali(void);
 
+void write_cali_to_e2(void);
+
 #endif

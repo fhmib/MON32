@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.2"; // 4 bytes
+char *fw_version = "S0.3"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;

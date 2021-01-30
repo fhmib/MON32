@@ -3,9 +3,9 @@
 <title>Static Call Graph - [MON32\MON32.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image MON32\MON32.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Sat Dec 19 15:29:17 2020
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Thu Jan 07 10:31:22 2021
 <BR><P>
-<H3>Maximum Stack Usage =        608 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        616 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
 lazerManagerTask &rArr; Cali_Power &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 <P>
@@ -1446,7 +1446,7 @@ Global Symbols
 <P><STRONG><a name="[2a]"></a>DebugMon_Handler</STRONG> (Thumb, 2 bytes, Stack size 0 bytes, stm32f4xx_it.o(i.DebugMon_Handler))
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f427xx.o(RESET)
 </UL>
-<P><STRONG><a name="[10e]"></a>Disable_Tosa</STRONG> (Thumb, 40 bytes, Stack size 8 bytes, functions.o(i.Disable_Tosa))
+<P><STRONG><a name="[10e]"></a>Disable_Tosa</STRONG> (Thumb, 64 bytes, Stack size 8 bytes, functions.o(i.Disable_Tosa))
 <BR><BR>[Stack]<UL><LI>Max Depth = 248<LI>Call Chain = Disable_Tosa &rArr; RTOS_DAC128S085_Write &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[bf]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Flag
@@ -1587,7 +1587,6 @@ Global Symbols
 <LI><a href="#[7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Get_Switch
 <LI><a href="#[93]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;monitorTask
 <LI><a href="#[90]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;isrTask
-<LI><a href="#[192]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init
 </UL>
 
 <P><STRONG><a name="[120]"></a>Get_EEPROM_Alarm_Status</STRONG> (Thumb, 68 bytes, Stack size 24 bytes, functions.o(i.Get_EEPROM_Alarm_Status))
@@ -2539,14 +2538,13 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[92]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;logTask
 </UL>
 
-<P><STRONG><a name="[192]"></a>MON32_Init</STRONG> (Thumb, 834 bytes, Stack size 40 bytes, main.o(i.MON32_Init))
-<BR><BR>[Stack]<UL><LI>Max Depth = 464<LI>Call Chain = MON32_Init &rArr; MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
+<P><STRONG><a name="[192]"></a>MON32_Init</STRONG> (Thumb, 706 bytes, Stack size 32 bytes, main.o(i.MON32_Init))
+<BR><BR>[Stack]<UL><LI>Max Depth = 456<LI>Call Chain = MON32_Init &rArr; MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay
 <LI><a href="#[be]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Throw_Log
 <LI><a href="#[bf]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Flag
 <LI><a href="#[c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;RTOS_EEPROM_Read
-<LI><a href="#[ec]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Current_Switch_Channel
 <LI><a href="#[108]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;FLASH_If_Erase_IT
 <LI><a href="#[16c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_IC_Start_IT
 <LI><a href="#[195]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MON32_Init_Dev
@@ -2565,7 +2563,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[90]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;isrTask
 </UL>
 
-<P><STRONG><a name="[195]"></a>MON32_Init_Dev</STRONG> (Thumb, 212 bytes, Stack size 40 bytes, main.o(i.MON32_Init_Dev))
+<P><STRONG><a name="[195]"></a>MON32_Init_Dev</STRONG> (Thumb, 192 bytes, Stack size 40 bytes, main.o(i.MON32_Init_Dev))
 <BR><BR>[Stack]<UL><LI>Max Depth = 424<LI>Call Chain = MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay
@@ -2995,10 +2993,11 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[22]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_For_Debug
 </UL>
 
-<P><STRONG><a name="[fc]"></a>Reset_Switch</STRONG> (Thumb, 156 bytes, Stack size 24 bytes, functions.o(i.Reset_Switch))
+<P><STRONG><a name="[fc]"></a>Reset_Switch</STRONG> (Thumb, 174 bytes, Stack size 24 bytes, functions.o(i.Reset_Switch))
 <BR><BR>[Stack]<UL><LI>Max Depth = 296<LI>Call Chain = Reset_Switch &rArr; Clear_Switch_Dac &rArr; set_sw_dac &rArr; RTOS_DAC5535_Write &rArr; Throw_Log &rArr; osMessageQueuePut &rArr; xQueueGenericSend &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
-<BR>[Calls]<UL><LI><a href="#[d1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Clear_Switch_Ready
+<BR>[Calls]<UL><LI><a href="#[fe]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Set_Switch_Ready
+<LI><a href="#[d1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Clear_Switch_Ready
 <LI><a href="#[11c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Index_Of_Channel_Map
 <LI><a href="#[cf]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Clear_Switch_Dac
 </UL>
@@ -3120,6 +3119,7 @@ Global Symbols
 <LI><a href="#[cc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_WritePin
 </UL>
 <BR>[Called By]<UL><LI><a href="#[e8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;debug_set_lp
+<LI><a href="#[fc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Reset_Switch
 <LI><a href="#[6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Cmd_Set_Switch
 <LI><a href="#[93]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;monitorTask
 <LI><a href="#[90]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;isrTask
@@ -3732,7 +3732,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[90]"></a>isrTask</STRONG> (Thumb, 626 bytes, Stack size 24 bytes, freertos.o(i.isrTask))
-<BR><BR>[Stack]<UL><LI>Max Depth = 488<LI>Call Chain = isrTask &rArr; MON32_Init &rArr; MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
+<BR><BR>[Stack]<UL><LI>Max Depth = 480<LI>Call Chain = isrTask &rArr; MON32_Init &rArr; MON32_Init_Dev &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[fd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMutexRelease
 <LI><a href="#[fa]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMutexAcquire
@@ -3753,8 +3753,8 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> freertos.o(i.MX_FREERTOS_Init)
 </UL>
-<P><STRONG><a name="[94]"></a>lazerManagerTask</STRONG> (Thumb, 1778 bytes, Stack size 128 bytes, freertos.o(i.lazerManagerTask))
-<BR><BR>[Stack]<UL><LI>Max Depth = 608<LI>Call Chain = lazerManagerTask &rArr; Cali_Power &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
+<P><STRONG><a name="[94]"></a>lazerManagerTask</STRONG> (Thumb, 1774 bytes, Stack size 136 bytes, freertos.o(i.lazerManagerTask))
+<BR><BR>[Stack]<UL><LI>Max Depth = 616<LI>Call Chain = lazerManagerTask &rArr; Cali_Power &rArr; Get_Tosa_Data &rArr; Cal_Tosa_Data &rArr; __aeabi_dsub &rArr; __aeabi_dadd &rArr; _double_epilogue &rArr; _double_round
 </UL>
 <BR>[Calls]<UL><LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
 <LI><a href="#[c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelay

@@ -158,6 +158,8 @@ void JumpToAddr(uint32_t addr)
   /* Initialize user application's Stack Pointer */
   __set_MSP(*(__IO uint32_t*) addr);
   JumpToApplication();
+  __NOP();
+  __NOP();
 }
 
 /**
@@ -175,7 +177,7 @@ void Main_Menu(void)
   Serial_PutString((uint8_t *)"\r\n======================================================================");
   Serial_PutString((uint8_t *)"\r\n=              (C) COPYRIGHT 2020 O-Net Technologies                 =");
   Serial_PutString((uint8_t *)"\r\n=                                                                    =");
-  Serial_PutString((uint8_t *)"\r\n=    1x64 Optical Switch Programming Application  (Version 1.0.1)    =");
+  Serial_PutString((uint8_t *)"\r\n=    1x64 Optical Switch Programming Application  (Version 0.0.4)    =");
   Serial_PutString((uint8_t *)"\r\n=                                                                    =");
   Serial_PutString((uint8_t *)"\r\n=                                                By Beijing R&D      =");
   Serial_PutString((uint8_t *)"\r\n======================================================================");

@@ -169,7 +169,7 @@ int8_t cmd_version(uint8_t argc, char **argv)
 
 int8_t cmd_switch(uint8_t argc, char **argv)
 {
-  if (argc >= 3 && !strcasecmp(argv[1], "write")) {
+  if (argc == 3 && !strcasecmp(argv[1], "write")) {
     return set_switch(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "read")) {
     return get_switch(argc, argv);
@@ -181,25 +181,17 @@ int8_t cmd_switch(uint8_t argc, char **argv)
 
 int8_t set_switch(uint8_t argc, char **argv)
 {
-  uint8_t switch_channel, switch_pos, which;
+  uint8_t switch_channel, switch_pos;
   uint8_t ret;
   
   if (argc == 3 && !strcasecmp(argv[0], "rxsw")) {
     switch_channel = 1;
     switch_pos = strtoul(argv[2], NULL, 10);
     switch_pos -= 1;
-  } else if (argc == 5 && !strcasecmp(argv[0], "txsw") && !strcasecmp(argv[3], "to")) {
+  } else if (argc == 3 && !strcasecmp(argv[0], "txsw")) {
     switch_channel = 0;
-    which = strtoul(argv[2], NULL, 10);
-    switch_pos = strtoul(argv[4], NULL, 10);
+    switch_pos = strtoul(argv[2], NULL, 10);
     switch_pos -= 1;
-    if (which == 1) {
-    } else if (which == 2) {
-      switch_pos += 0x20;
-    } else {
-      cmd_help2(argv[0]);
-      return 0;
-    }
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -235,10 +227,8 @@ int8_t get_switch(uint8_t argc, char **argv)
   } else if (!strcasecmp(argv[0], "txsw")) {
     if (rBuf[CMD_SEQ_MSG_DATA + 1] == 0xFF) {
       PRINT("TX switch channel is blocked\r\n");
-    } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 0x20) {
-      PRINT("TX switch channel is 1 to %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
     } else {
-      PRINT("TX switch channel is 2 to %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] - 0x20 + 1);
+      PRINT("TX switch channel is %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
     }
   }
 
@@ -306,7 +296,7 @@ int8_t cmd_tosa(uint8_t argc, char **argv)
     set_tosa(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "get")) {
     get_tosa(argc, argv);
-  } else if (argc == 2 && !strcasecmp(argv[1], "thr")) {
+  } else if (argc == 3 && !strcasecmp(argv[1], "thr")) {
     get_tosa_thr(argc, argv);
   } else {
     cmd_help2(argv[0]);
@@ -360,8 +350,10 @@ int8_t get_tosa_thr(uint8_t argc, char **argv)
   int8_t ret;
   uint8_t *p;
   int16_t temp;
+  
+  txBuf[0] = (uint8_t)strtoul(argv[2], NULL, 0);
 
-  ret = process_command(CMD_QUERY_TOSA_THR, txBuf, 0, rBuf, &rLen);
+  ret = process_command(CMD_QUERY_TOSA_THR, txBuf, 1, rBuf, &rLen);
   if (ret) {
     return ret;
   }
@@ -387,12 +379,14 @@ int8_t cmd_rx_pd_cali(uint8_t argc, char **argv)
   uint16_t adc;
   double val_f;
 
-  if (argc > 1) {
+  if (argc != 2) {
     cmd_help2(argv[0]);
     return 0;
   }
+  
+  txBuf[0] = (uint8_t)strtoul(argv[1], NULL, 0);
 
-  ret = process_command(CMD_RX_PD_CALI, txBuf, 0, rBuf, &rLen);
+  ret = process_command(CMD_RX_PD_CALI, txBuf, 1, rBuf, &rLen);
   if (ret) {
     return ret;
   }
@@ -417,12 +411,14 @@ int8_t cmd_tap_pd_cali(uint8_t argc, char **argv)
   uint16_t adc;
   double val_f;
 
-  if (argc > 1) {
+  if (argc != 2) {
     cmd_help2(argv[0]);
     return 0;
   }
 
-  ret = process_command(CMD_TAP_PD_CALI, txBuf, 0, rBuf, &rLen);
+  txBuf[0] = (uint8_t)strtoul(argv[1], NULL, 0);
+
+  ret = process_command(CMD_TAP_PD_CALI, txBuf, 1, rBuf, &rLen);
   if (ret) {
     return ret;
   }
@@ -513,8 +509,10 @@ int8_t get_loopback_status(void)
   if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
     PRINT("Loopback check success\r\n");
   } else if (rBuf[CMD_SEQ_MSG_DATA] == 1) {
-    PRINT("Loopback check failed\r\n");
+    PRINT("C98 Loopback check failed\r\n");
   } else if (rBuf[CMD_SEQ_MSG_DATA] == 2) {
+    PRINT("C122 Loopback check failed\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 3) {
     PRINT("Loopback check ongoing\r\n");
   } else {
   }
@@ -939,32 +937,32 @@ int8_t cmd_performance(uint8_t argc, char **argv)
         break;
       case 0xB:
         u_val32 = (uint32_t)Buffer_To_BE16(p + 1);
-        PRINT("2x32 X1 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("TX 1x32 X1 : %u(%#X)\r\n", u_val32, u_val32);
         u_val32 = (uint32_t)Buffer_To_BE16(p + 3);
-        PRINT("2x32 X2 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("TX 1x32 X2 : %u(%#X)\r\n", u_val32, u_val32);
         break;
       case 0xC:
         u_val32 = (uint32_t)Buffer_To_BE16(p + 1);
-        PRINT("2x32 Y1 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("TX 1x32 Y1 : %u(%#X)\r\n", u_val32, u_val32);
         u_val32 = (uint32_t)Buffer_To_BE16(p + 3);
-        PRINT("2x32 Y2 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("TX 1x32 Y2 : %u(%#X)\r\n", u_val32, u_val32);
         break;
       case 0xD:
         u_val32 = (uint32_t)Buffer_To_BE16(p + 1);
-        PRINT("1x32 X1 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("RX 1x32 X1 : %u(%#X)\r\n", u_val32, u_val32);
         u_val32 = (uint32_t)Buffer_To_BE16(p + 3);
-        PRINT("1x32 X2 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("RX 1x32 X2 : %u(%#X)\r\n", u_val32, u_val32);
         break;
       case 0xE:
         u_val32 = (uint32_t)Buffer_To_BE16(p + 1);
-        PRINT("1x32 Y1 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("RX 1x32 Y1 : %u(%#X)\r\n", u_val32, u_val32);
         u_val32 = (uint32_t)Buffer_To_BE16(p + 3);
-        PRINT("1x32 Y2 : %u(%#X)\r\n", u_val32, u_val32);
+        PRINT("RX 1x32 Y2 : %u(%#X)\r\n", u_val32, u_val32);
         break;
       case 0xF:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
         d_val = (double)val32 / 100;
-        PRINT("TAP PD Power + 2x32 chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
+        PRINT("TAP PD Power + tx 1x32 chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
         break;
       case 0x10:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
@@ -974,12 +972,12 @@ int8_t cmd_performance(uint8_t argc, char **argv)
       case 0x11:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
         d_val = (double)val32 / 100;
-        PRINT("2x32 Current chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
+        PRINT("TX 1x32 Current chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
         break;
       case 0x12:
         val32 = (int32_t)Buffer_To_BE32(p + 1);
         d_val = (double)val32 / 100;
-        PRINT("1x32 Current chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
+        PRINT("RX 1x32 Current chan IL : %.2lf(%#X)dBm\r\n", d_val, val32);
         break;
       default:
         PRINT("Unknown performance id %u\r\n", *p);
@@ -1138,6 +1136,47 @@ int8_t log_content(uint8_t argc, char **argv)
   return ret;
 }
 
+int8_t cmd_tosa_status(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  if (argc > 1) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+
+  ret = process_command(CMD_QUERY_TOSA_STATUS, txBuf, 0, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  if (rBuf[CMD_SEQ_MSG_DATA] == 0) {
+    PRINT("191.2THz C98\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 1) {
+    PRINT("190.6THz C122\r\n");
+  } else if (rBuf[CMD_SEQ_MSG_DATA] == 2) {
+    PRINT("The tosa is switching\r\n");
+  } else {
+    PRINT("Unknown parameter %u\r\n", rBuf[CMD_SEQ_MSG_DATA]);
+  }
+
+  return 0;
+}
+
+int8_t cmd_set_tosa_wavelength(uint8_t argc, char **argv)
+{
+  uint8_t which;
+
+  if (argc != 2) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+  
+  which = (uint8_t)strtoul(argv[1], NULL,0);
+  txBuf[0] = which;
+  return process_command(CMD_SET_TOSA_WAVELENGTH, txBuf, 1, rBuf, &rLen);
+}
+
+
 int8_t cmd_for_debug(uint8_t argc, char **argv)
 {
   if (argc == 5 && !strcasecmp(argv[1], "dac")) {
@@ -1162,7 +1201,7 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_monitor(argc, argv);
   } else if (argc == 4 && !strcasecmp(argv[1], "pin")) {
     return debug_pin(argc, argv);
-  } else if (argc == 5 && !strcasecmp(argv[1], "txsw_io") && !strcasecmp(argv[3], "to")) {
+  } else if (argc == 3 && !strcasecmp(argv[1], "txsw_io")) {
     return debug_switch_io(argc, argv);
   } else if (argc == 3 && !strcasecmp(argv[1], "rxsw_io")) {
     return debug_switch_io(argc, argv);
@@ -1176,6 +1215,8 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_set_tec(argc, argv);
   } else if (argc == 3 && !strcasecmp(argv[1], "timer")) {
     return debug_set_tim(argc, argv);
+  } else if (argc == 3 && !strcasecmp(argv[1], "timer2")) {
+    return debug_set_tim(argc, argv);
   } else if (argc == 2 && !strcasecmp(argv[1], "get_temp")) {
     return debug_get_tmp_all(argc, argv);
   } else if (argc == 3 && !strcasecmp(argv[1], "set_freq")) {
@@ -1184,7 +1225,7 @@ int8_t cmd_for_debug(uint8_t argc, char **argv)
     return debug_spi(argc, argv);
   } else if (argc == 2 && !strncasecmp(argv[1], "pd", 2)) {
     return debug_get_pd(argc, argv);
-  } else if (argc == 3 && !strncasecmp(argv[1], "loopback", 2)) {
+  } else if (argc == 3 && !strcasecmp(argv[1], "loopback")) {
     return debug_set_lp(argc, argv);
   } else if (argc == 2 && !strncasecmp(argv[1], "switch_channel", 2)) {
     return debug_get_switch_channel();
@@ -1383,13 +1424,34 @@ int8_t debug_cal(uint8_t argc, char **argv)
     BE32_To_Buffer(val_x, txBuf + 16);
     BE32_To_Buffer(val_y, txBuf + 20);
     ret = process_command(CMD_FOR_DEBUG, txBuf, 24, rBuf, &rLen);
-  } else if (argc == 8 && !strcasecmp(argv[2], "tosa")) {
+  } else if (argc == 8 && !strcasecmp(argv[2], "tosa_C98")) {
     sw_num = strtoul(argv[3], NULL, 10);
     if (sw_num < 1 || sw_num > 10) {
       PRINT("Invalid number\r\n");
       return 2;
     }
     sw_num -= 1;
+    num = strtoul(argv[4], NULL, 10);
+    u_val = strtoul(argv[5], NULL, 10);
+    u_val1 = strtoul(argv[6], NULL, 10);
+    sscanf(argv[7], "%lf", &d_val);
+    val_x = (int32_t)(d_val * 100);
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_CAL_TOSA, txBuf + 4);
+    BE32_To_Buffer(sw_num, txBuf + 8);
+    BE32_To_Buffer(num, txBuf + 12);
+    BE32_To_Buffer(u_val, txBuf + 16);
+    BE32_To_Buffer(u_val1, txBuf + 20);
+    BE32_To_Buffer((uint32_t)val_x, txBuf + 24);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 28, rBuf, &rLen);
+  } else if (argc == 8 && !strcasecmp(argv[2], "tosa_C122")) {
+    sw_num = strtoul(argv[3], NULL, 10);
+    if (sw_num < 1 || sw_num > 10) {
+      PRINT("Invalid number\r\n");
+      return 2;
+    }
+    sw_num -= 1;
+    sw_num += 10;
     num = strtoul(argv[4], NULL, 10);
     u_val = strtoul(argv[5], NULL, 10);
     u_val1 = strtoul(argv[6], NULL, 10);
@@ -1412,8 +1474,28 @@ int8_t debug_cal(uint8_t argc, char **argv)
     BE32_To_Buffer(num, txBuf + 8);
     BE32_To_Buffer(val_x, txBuf + 12);
     ret = process_command(CMD_FOR_DEBUG, txBuf, 16, rBuf, &rLen);
-  } else if (argc == 6 && !strcasecmp(argv[2], "pd2")) {
+  } else if (argc == 6 && !strcasecmp(argv[2], "pd3")) {
+    num = strtoul(argv[3], NULL, 10);\
+    if (num < 1 || num > 10) {
+      PRINT("Invalid number\r\n");
+      return 3;
+    }
+    u_val = strtoul(argv[4], NULL, 10);
+    sscanf(argv[5], "%lf", &d_val);
+    val_x = (int32_t)(d_val * 100);
+    BE32_To_Buffer(0x5A5AA5A5, txBuf);
+    BE32_To_Buffer(CMD_DEBUG_CAL_RX_PD, txBuf + 4);
+    BE32_To_Buffer(num, txBuf + 8);
+    BE32_To_Buffer(u_val, txBuf + 12);
+    BE32_To_Buffer(val_x, txBuf + 16);
+    ret = process_command(CMD_FOR_DEBUG, txBuf, 20, rBuf, &rLen);
+  } else if (argc == 6 && !strcasecmp(argv[2], "pd4")) {
     num = strtoul(argv[3], NULL, 10);
+    if (num < 1 || num > 10) {
+      PRINT("Invalid number\r\n");
+      return 3;
+    }
+    num += 10;
     u_val = strtoul(argv[4], NULL, 10);
     sscanf(argv[5], "%lf", &d_val);
     val_x = (int32_t)(d_val * 100);
@@ -1495,17 +1577,23 @@ int8_t debug_dump(uint8_t argc, char **argv)
     if (which == 1) count = 6;
     else if (which == 5) count = 3;
     else count = 11;
-  } else if (!strcasecmp(argv[2], "tosa")) {
+  } else if (!strcasecmp(argv[2], "tosa_C98")) {
     which = 10;
     count = 10;
   } else if (!strcasecmp(argv[2], "il")) {
     which = 11;
-  } else if (!strcasecmp(argv[2], "pd2")) {
+  } else if (!strcasecmp(argv[2], "pd3")) {
     which = 15;
     count = 10;
   } else if (!strcasecmp(argv[2], "tec_temp")) {
     which = 16;
     count = 1;
+  } else if (!strcasecmp(argv[2], "tosa_C122")) {
+    which = 17;
+    count = 10;
+  } else if (!strcasecmp(argv[2], "pd4")) {
+    which = 18;
+    count = 10;
   } else {
     cmd_help2(argv[0]);
     return 0;
@@ -1526,7 +1614,7 @@ int8_t debug_dump(uint8_t argc, char **argv)
       val_y = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 8 + 4]);
       PRINT("%u,%d,%d\r\n", i + 1, val_x, val_y);
     }
-  } else if (which == 10) {
+  } else if (which == 10 || which == 17) {
     PRINT("Tosa:\r\n");
     for (i = 0; i < count; ++i) {
       PRINT("%u,", i + 1);
@@ -1541,13 +1629,14 @@ int8_t debug_dump(uint8_t argc, char **argv)
       PRINT("%.2lf\r\n", d_val);
     }
   } else if (which == 11) {
-    PRINT("2x32 Insertion Loss:\r\n");
+    PRINT("tx C98 Insertion Loss:\r\n");
     for (i = 0; i < 32; ++i) {
       val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 4]);
       d_val = (double)val_x / 100;
       PRINT("%u,%.2lf\r\n", i + 1, d_val);
     }
 
+    PRINT("tx C122 Insertion Loss:\r\n");
     which = 12;
     BE32_To_Buffer(0x5A5AA5A5, txBuf);
     BE32_To_Buffer(CMD_DEBUG_DUMP, txBuf + 4);
@@ -1570,7 +1659,7 @@ int8_t debug_dump(uint8_t argc, char **argv)
     if (ret) {
       return ret;
     }
-    PRINT("1x32 Insertion Loss:\r\n");
+    PRINT("rx 1x32 Insertion Loss:\r\n");
     for (i = 0; i < 32; ++i) {
       val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 4]);
       d_val = (double)val_x / 100;
@@ -1588,9 +1677,22 @@ int8_t debug_dump(uint8_t argc, char **argv)
     PRINT("Loopback Insertion Loss:\r\n");
     val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
     d_val = (double)val_x / 100;
-    PRINT("%.2lf\r\n", d_val);
+    PRINT("1,%.2lf\r\n", d_val);
+    val_x = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 4]);
+    d_val = (double)val_x / 100;
+    PRINT("2,%.2lf\r\n", d_val);
   } else if (which == 15) {
-    PRINT("PD2:\r\n");
+    PRINT("PD3:\r\n");
+    for (i = 0; i < count; ++i) {
+      PRINT("%u,", i + 1);
+      which = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 8]);
+      PRINT("%u,", which);
+      which = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 8 + 4]);
+      d_val = (double)((int32_t)which) / 100;
+      PRINT("%.2lf\r\n", d_val);
+    }
+  } else if (which == 18) {
+    PRINT("PD4:\r\n");
     for (i = 0; i < count; ++i) {
       PRINT("%u,", i + 1);
       which = (int32_t)Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + i * 8]);
@@ -1666,6 +1768,10 @@ int8_t debug_monitor(uint8_t argc, char **argv)
   PRINT("RX Switch Ready signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
   state = HAL_GPIO_ReadPin(L_READY_GPIO_Port, L_READY_Pin);
   PRINT("L_Ready signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
+  state = HAL_GPIO_ReadPin(L_READY_2_oldboard_GPIO_Port, L_READY_2_oldboard_Pin);
+  PRINT("L_Ready_2 signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
+  state = HAL_GPIO_ReadPin(L_READY_2_newboard_GPIO_Port, L_READY_2_newboard_Pin);
+  PRINT("L_Ready_TEST signal is %s\r\n", state == GPIO_PIN_SET ? "not set" : "set");
 
   return 0;
 }
@@ -1703,9 +1809,12 @@ int8_t debug_pin(uint8_t argc, char **argv)
     type = 4;
   } else if (!strcasecmp(argv[2], "test_block")) {
     type = 5;
-  } else if (!strcasecmp(argv[2], "pro")) {
+  } else if (!strcasecmp(argv[2], "pro1")) {
     port = PRO_CTL_GPIO_Port;
     pin = PRO_CTL_Pin;
+  } else if (!strcasecmp(argv[2], "pro2")) {
+    port = PRO_CTL_2_GPIO_Port;
+    pin = PRO_CTL_2_Pin;
   } else if (!strcasecmp(argv[2], "master_reset")) {
     port = MASTER_RESET_GPIO_Port;
     pin = MASTER_RESET_Pin;
@@ -1733,9 +1842,6 @@ int8_t debug_pin(uint8_t argc, char **argv)
   } else if (!strcasecmp(argv[2], "sw1_D4")) {
     port = SW1_D4_GPIO_Port;
     pin = SW1_D4_Pin;
-  } else if (!strcasecmp(argv[2], "sw1_D5")) {
-    port = SW1_D5_GPIO_Port;
-    pin = SW1_D5_Pin;
   } else if (!strcasecmp(argv[2], "sw1_mode")) {
     port = SW1_MODE_SEL_GPIO_Port;
     pin = SW1_MODE_SEL_Pin;
@@ -1794,20 +1900,12 @@ int8_t debug_switch_io(uint8_t argc, char **argv)
   uint32_t chan;
 
   if (!strcasecmp(argv[1], "txsw_io")) {
-    chan = strtoul(argv[4], NULL, 10);
+    chan = strtoul(argv[2], NULL, 10);
     if (chan > 32 || chan == 0) {
       PRINT("Channel number invalid\r\n");
       return 1;
     }
     chan -= 1;
-    if (!strcasecmp(argv[2], "1")) {
-      chan = (chan << 1) & (~0x1);
-    } else if (!strcasecmp(argv[2], "2")) {
-      chan = (chan << 1) | 0x1;
-    } else {
-      cmd_help2(argv[0]);
-      return 0;
-    }
     PRINT("Set value: %#X\r\n", chan);
     HAL_GPIO_WritePin(SW1_STROBE_GPIO_Port, SW1_STROBE_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(SW1_MODE_SEL_GPIO_Port, SW1_MODE_SEL_Pin, GPIO_PIN_RESET);
@@ -1816,9 +1914,8 @@ int8_t debug_switch_io(uint8_t argc, char **argv)
     HAL_GPIO_WritePin(SW1_D2_GPIO_Port, SW1_D2_Pin, (GPIO_PinState)((chan >> 2) & 0x1));
     HAL_GPIO_WritePin(SW1_D3_GPIO_Port, SW1_D3_Pin, (GPIO_PinState)((chan >> 3) & 0x1));
     HAL_GPIO_WritePin(SW1_D4_GPIO_Port, SW1_D4_Pin, (GPIO_PinState)((chan >> 4) & 0x1));
-    HAL_GPIO_WritePin(SW1_D5_GPIO_Port, SW1_D5_Pin, (GPIO_PinState)((chan >> 5) & 0x1));
     HAL_GPIO_WritePin(SW1_STROBE_GPIO_Port, SW1_STROBE_Pin, GPIO_PIN_RESET);
-    HAL_Delay(10);
+    HAL_Delay(1);
     HAL_GPIO_WritePin(SW1_MODE_SEL_GPIO_Port, SW1_MODE_SEL_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(SW1_STROBE_GPIO_Port, SW1_STROBE_Pin, GPIO_PIN_SET);
   } else {
@@ -1837,7 +1934,7 @@ int8_t debug_switch_io(uint8_t argc, char **argv)
     HAL_GPIO_WritePin(SW2_D3_GPIO_Port, SW2_D3_Pin, (GPIO_PinState)((chan >> 3) & 0x1));
     HAL_GPIO_WritePin(SW2_D4_GPIO_Port, SW2_D4_Pin, (GPIO_PinState)((chan >> 4) & 0x1));
     HAL_GPIO_WritePin(SW2_STROBE_GPIO_Port, SW2_STROBE_Pin, GPIO_PIN_RESET);
-    HAL_Delay(10);
+    HAL_Delay(1);
     HAL_GPIO_WritePin(SW2_MODE_SEL_GPIO_Port, SW2_MODE_SEL_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(SW2_STROBE_GPIO_Port, SW2_STROBE_Pin, GPIO_PIN_SET);
   }
@@ -1880,6 +1977,12 @@ int8_t debug_set_tec(uint8_t argc, char **argv)
 
 int8_t debug_set_tim(uint8_t argc, char **argv)
 {
+  if (!strcasecmp(argv[1], "timer")) {
+    pro_ctl_c122 = 0;
+  } else if (!strcasecmp(argv[1], "timer2")) {
+    pro_ctl_c122 = 1;
+  }
+
   if (!strcasecmp(argv[2], "on")) {
     HAL_TIM_Base_Start_IT(&htim3);
   } else if (!strcasecmp(argv[2], "off")) {
@@ -1906,6 +2009,7 @@ int8_t debug_get_tmp_all(uint8_t argc, char **argv)
     return ret;
   }
   
+  PRINT("C98\r\n");
   p = rBuf + CMD_SEQ_MSG_DATA;
   value = switch_endian(*(uint32_t*)p);
   p = rBuf + CMD_SEQ_MSG_DATA + 4;
@@ -1939,6 +2043,44 @@ int8_t debug_get_tmp_all(uint8_t argc, char **argv)
   p = rBuf + CMD_SEQ_MSG_DATA + 40;
   value = switch_endian(*(uint32_t*)p);
   p = rBuf + CMD_SEQ_MSG_DATA + 44;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("MPD_Current: %duA, Original value: %u\r\n", temp, value);
+
+  PRINT("\r\nC122\r\n");
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 4;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("Tosa Temperature: %.2lfC, Original value: %u\r\n", (double)temp/100, value);
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 8;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 12;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("TEC Voltage: %dmV, Original value: %u\r\n", temp, value);
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 16;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 20;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("TEC Current: %dmA, Original value: %u\r\n", temp, value);
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 24;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 28;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("LD Current: %dmA, Original value: %u\r\n", temp, value);
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 32;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 36;
+  temp = (int16_t)switch_endian(*(uint32_t*)p);
+  PRINT("LD Voltage: %dmV, Original value: %u\r\n", temp, value);
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 40;
+  value = switch_endian(*(uint32_t*)p);
+  p = rBuf + CMD_SEQ_MSG_DATA + 48 + 44;
   temp = (int16_t)switch_endian(*(uint32_t*)p);
   PRINT("MPD_Current: %duA, Original value: %u\r\n", temp, value);
 
@@ -2047,6 +2189,10 @@ int8_t debug_get_pd(uint8_t argc, char **argv)
     which = 0;
   } else if (value == 2) {
     which = 1;
+  } else if (value == 3) {
+    which = 2;
+  } else if (value == 4) {
+    which = 3;
   } else {
     cmd_help2(argv[0]);
     return 0; 
@@ -2109,15 +2255,15 @@ int8_t debug_get_switch_channel()
     return ret;
   }
   if (rBuf[CMD_SEQ_MSG_DATA + 1] < 32) {
-    PRINT("TX channel is 1 to %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
+    PRINT("TX channel is %u(C98)\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1);
   } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 64) {
-    PRINT("TX channel is 2 to %u\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] - 32 + 1);
+    PRINT("TX channel is %u(C122)\r\n", rBuf[CMD_SEQ_MSG_DATA + 1] + 1 - 32);
   } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 65) {
-    PRINT("TX channel is 1 to 33\r\n");
+    PRINT("TX channel is 33(C98)\r\n");
   } else if (rBuf[CMD_SEQ_MSG_DATA + 1] < 66) {
-    PRINT("TX channel is 2 to 33\r\n");
+    PRINT("TX channel is 33(C122)\r\n");
   } else {
-    PRINT("Invalid TX channel\r\n");
+    PRINT("Invalid TX channel %#X\r\n", rBuf[CMD_SEQ_MSG_DATA + 1]);
   }
 
   which = 1;

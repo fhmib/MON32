@@ -295,6 +295,9 @@ void MON32_Init(void)
 
   update_tosa_table();
 
+  HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
+
   if (IS_RESETFLAG_SET(SFT_RESET_BIT) || IS_RESETFLAG_SET(IWDG_RESET_BIT)) {
     if (run_status.maigc == RUN_MAGIC) {
       if (run_status.uart_reset) {
@@ -317,7 +320,7 @@ void MON32_Init(void)
       } else {
         HAL_GPIO_WritePin(ALARM_GPIO_Port, ALARM_Pin, GPIO_PIN_SET);
       }
-
+#if 0
       // 2x32 switch signal
       if (run_status.tx_block == 1) {
         HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
@@ -349,7 +352,7 @@ void MON32_Init(void)
       } else {
         HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
       }
-      
+#endif
       // Modulation
       if (run_status.modulation) {
         HAL_TIM_IC_Start_IT(&htim8, TIM_CHANNEL_1);
@@ -382,7 +385,6 @@ void MON32_Init(void)
     // Init device
     run_status.maigc = 0;
     Reset_Switch_Only(TX_SWITCH_CHANNEL);
-    Disable_Tosa();
     MON32_Init_Dev();
     EPT("Startup with MASTER Reset\n");
     THROW_LOG(MSG_TYPE_NORMAL_LOG, "Startup with MASTER Reset\n");
@@ -472,8 +474,6 @@ void MON32_Init_Dev(void)
 {
   osStatus_t status;
 
-  HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(ALARM_GPIO_Port, ALARM_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(LATCH_GPIO_Port, LATCH_Pin, GPIO_PIN_SET);
@@ -485,12 +485,12 @@ void MON32_Init_Dev(void)
 
   run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
   run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
-  if (run_status.tosa_high.tosa_dac) {
-    status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, run_status.tosa_high.tec_dac, DAC128S085_MODE_NORMAL);
-    if (status != osOK) {
-      Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
-    }
-    DAC5541_Write(run_status.tosa_high.tosa_dac);
+  status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  DAC5541_Write(0);
+  if (status != osOK) {
+    Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
   }
 }
 
@@ -522,11 +522,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM8) {
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
       // Rising Edge
-      DAC5541_Write(run_status.tosa_high.tosa_dac);
+      if (run_status.lazer_ready) {
+        DAC5541_Write(run_status.tosa_high.tosa_dac);
+      }
       run_status.power_mode = 1;
     } else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {
       // Failing Edge
-      DAC5541_Write(run_status.tosa_low.tosa_dac);
+      if (run_status.lazer_ready) {
+        DAC5541_Write(run_status.tosa_low.tosa_dac);
+      }
       run_status.power_mode = 0;
     }
   }

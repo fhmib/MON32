@@ -90,8 +90,6 @@ uint32_t send_cmd(uint8_t ch, char *arg);
 #define SW2_D1_GPIO_Port GPIOD
 #define SW2_D0_Pin GPIO_PIN_2
 #define SW2_D0_GPIO_Port GPIOD
-#define L_READY_2_Pin GPIO_PIN_15
-#define L_READY_2_GPIO_Port GPIOH
 #define IN_ALARM_Pin GPIO_PIN_1
 #define IN_ALARM_GPIO_Port GPIOI
 #define SW1_STROBE_Pin GPIO_PIN_13
@@ -124,6 +122,8 @@ uint32_t send_cmd(uint8_t ch, char *arg);
 #define OUT_VOL_5_0_GPIO_Port GPIOG
 #define SW1_D1_Pin GPIO_PIN_7
 #define SW1_D1_GPIO_Port GPIOH
+#define L_READY_2_Pin GPIO_PIN_9
+#define L_READY_2_GPIO_Port GPIOD
 #define PRO_DIS_N_Pin GPIO_PIN_8
 #define PRO_DIS_N_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */

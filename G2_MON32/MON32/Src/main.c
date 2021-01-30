@@ -307,6 +307,9 @@ void MON32_Init(void)
 
   update_tosa_table();
 
+  HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
+
   if (IS_RESETFLAG_SET(SFT_RESET_BIT) || IS_RESETFLAG_SET(IWDG_RESET_BIT)) {
     if (run_status.maigc == RUN_MAGIC) {
       if (run_status.uart_reset) {
@@ -329,7 +332,7 @@ void MON32_Init(void)
       } else {
         HAL_GPIO_WritePin(ALARM_GPIO_Port, ALARM_Pin, GPIO_PIN_SET);
       }
-
+#if 0
       // tx switch signal
       if (run_status.tx_block == 1) {
         HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
@@ -361,7 +364,7 @@ void MON32_Init(void)
       } else {
         HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
       }
-      
+#endif
       // Modulation
       if (run_status.modulation) {
         if (run_status.tosa_C122) {
@@ -495,8 +498,6 @@ void MON32_Init_Dev(void)
 {
   osStatus_t status;
 
-  HAL_GPIO_WritePin(SW1_READY_GPIO_Port, SW1_READY_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(SW2_READY_GPIO_Port, SW2_READY_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(ALARM_GPIO_Port, ALARM_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(L_READY_N_GPIO_Port, L_READY_N_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(L_READY_N_2_GPIO_Port, L_READY_N_2_Pin, GPIO_PIN_SET);

@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S0.1"; // 4 bytes
+char *fw_version = "S0.3"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -209,6 +209,17 @@ uint8_t Cmd_Set_Switch(void)
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
+
+    if (run_status.tosa_C122) {
+      switch_pos += 32;
+    }
+
+    if (run_status.tx_switch_channel == switch_pos) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as tx current channel\n");
+      FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
+    }
+
   } else if (switch_channel == RX_SWITCH_CHANNEL) {
     if (HAL_GPIO_ReadPin(SW2_MODE_SEL_GPIO_Port, SW2_MODE_SEL_Pin) == GPIO_PIN_RESET) {
       EPT("Switch 1x32 command come but switch mode is wrong\n");
@@ -223,6 +234,17 @@ uint8_t Cmd_Set_Switch(void)
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
+
+    if (run_status.tosa_C122) {
+      switch_pos += 32;
+    }
+
+    if (run_status.rx_switch_channel == switch_pos) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as rx current channel\n");
+      FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
+    }
+
   } else {
     EPT("Switch command parameter is invalid\n");
     THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch command parameter is invalid\n");
@@ -231,14 +253,10 @@ uint8_t Cmd_Set_Switch(void)
   }
   
   if (switch_channel == TX_SWITCH_CHANNEL && run_status.tx_block) {
-    // THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked\n\n");
-    run_status.tx_switch_channel = switch_pos;
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked by SW1_BLOCK\n");
+    // run_status.tx_switch_channel = switch_pos;
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
     return RESPOND_SUCCESS;
-  }
-
-  if (switch_channel == TX_SWITCH_CHANNEL && run_status.tosa_C122) {
-    switch_pos += 32;
   }
 
   if (osMutexAcquire(swMutex, 50) != osOK) {
@@ -270,7 +288,7 @@ uint8_t Cmd_Set_Switch(void)
 
   // Check
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-    Reset_Switch(switch_channel);
+    Reset_Switch_Only(switch_channel);
     EPT("Set switch channel failed 2\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
     osMutexRelease(swMutex);
@@ -321,12 +339,12 @@ uint8_t Cmd_Get_Switch(void)
       resp_buf.buf[1] = 0xFF;
       FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_FAILURE, 2);
       return RESPOND_FAILURE;
-    } else if (ret >= 32) {
+    } else if (ret >= 64) {
       resp_buf.buf[1] = 0xFF;
       FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_INVALID_PARA, 2);
       return RESPOND_INVALID_PARA;
     } else {
-      resp_buf.buf[1] = ret;
+      resp_buf.buf[1] = ret % 32;
     }
     FILL_RESP_MSG(CMD_QUERY_SWITCH, RESPOND_SUCCESS, 2);
     return RESPOND_SUCCESS;
@@ -1278,6 +1296,9 @@ uint8_t Cmd_Set_Tosa_Wavelength(void)
     msg.pbuf = NULL;
     msg.type = MSG_TYPE_SWITCH_WAVELENGTH;
     osMessageQueuePut(mid_LazerManager2, &msg, 0U, 0U);
+  } else {
+    FILL_RESP_MSG(CMD_SET_TOSA_WAVELENGTH, RESPOND_FAILURE, 0);
+    return RESPOND_FAILURE;
   }
 
   FILL_RESP_MSG(CMD_SET_TOSA_WAVELENGTH, RESPOND_SUCCESS, 0);
@@ -1376,8 +1397,9 @@ uint8_t Cmd_For_Debug()
     return ret;
   } else if (temp == CMD_DEBUG_CAL_DEF_TEMP) {
     memset(resp_buf.buf, 0, 4);
-    val = (int32_t)Buffer_To_BE32(prdata + 8);
-    ret = debug_cal_default_temp(val);
+    sw_num = Buffer_To_BE32(prdata + 8);
+    val = (int32_t)Buffer_To_BE32(prdata + 12);
+    ret = debug_cal_default_temp(sw_num, val);
     FILL_RESP_MSG(CMD_FOR_DEBUG, ret, 4);
     return ret;
   } else if (temp == CMD_DEBUG_CAL_RX_PD) {

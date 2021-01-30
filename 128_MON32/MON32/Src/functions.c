@@ -284,7 +284,7 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
       temp_first = temp;
       i++;
     } else {
-      if (temp >= temp_first - 0.2 && temp <= temp_first + 0.2) {
+      if (temp >= temp_first - 0.1 && temp <= temp_first + 0.1) {
         i++;
       } else {
         i = 0;
@@ -958,6 +958,11 @@ void Reset_Switch(uint8_t switch_channel)
       index = Get_Index_Of_Channel_Map(switch_channel, pos);
       Clear_Switch_Dac(channel_map[index].first_switch);
       Clear_Switch_Dac(channel_map[index].second_switch);
+      if (switch_channel == TX_SWITCH_CHANNEL) {
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+      } else {
+        Set_Switch_Ready(RX_SWITCH_CHANNEL);
+      }
     }
 
     if (switch_channel == TX_SWITCH_CHANNEL) {
@@ -978,6 +983,8 @@ void Reset_Switch(uint8_t switch_channel)
     Clear_Switch_Dac(SWITCH_NUM_8);
     run_status.tx_switch_channel = 0xFF;
     run_status.rx_switch_channel = 0xFF;
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
   }
 }
 
@@ -1069,7 +1076,7 @@ void Init_Run_Status(void)
   run_status.allow_monitor = 0;
   run_status.power_mode = 1;
 
-  run_status.osc_status = OSC_FAILURE;
+  run_status.osc_status = 0xFF;
   run_status.sw_adc_int = 200;
   run_status.sw_adc_double = 0.05;
 }
@@ -1178,6 +1185,8 @@ uint8_t Disable_Tosa()
 
   status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
   status |= RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  DAC5541_Write(0);
 
   if (status != osOK) {
     Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
@@ -2742,7 +2751,7 @@ uint8_t debug_set_lp(uint32_t which)
 
   // Check
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-    Reset_Switch(switch_channel);
+    Reset_Switch_Only(switch_channel);
     return RESPOND_FAILURE;
   }
 
@@ -3039,3 +3048,42 @@ uint8_t debug_Cmd_Check_Cali(void)
   return RESPOND_SUCCESS;
 }
 
+const uint32_t tx_il_table_for_303821[64] = {
+  147, 118, 154, 160, 130, 161, 134, 139, 123, 157, 146, 136,  83,  90,  96,  98,
+  109, 147, 124,  96,  88, 114, 133, 165, 121,  91, 134, 108, 114, 132, 159, 184,
+  196, 171, 211, 203, 184, 216, 189, 185, 179, 215, 200, 191, 143, 146, 153, 151,
+  161, 199, 188, 156, 153, 178, 181, 210, 171, 139, 185, 160, 162, 181, 208, 234
+};
+const uint32_t lp_il_for_303821 = 229;
+
+const uint32_t tx_il_table_for_303822[64] = {
+  138, 148, 174, 125, 131, 149, 123, 130, 116, 114, 136, 197, 157, 141, 137, 105,
+  160, 121, 175, 165, 132, 103, 113, 155, 159, 177, 156, 206, 200, 184, 157, 145,
+  192, 171, 170, 220, 195, 181, 248, 183, 160, 162, 171, 187, 186, 220, 168, 195,
+  205, 221, 222, 176, 166, 195, 215, 221, 232, 243, 255, 200, 221, 203, 191, 200
+};
+const uint32_t lp_il_for_303822 = 256;
+
+void write_cali_to_e2(void)
+{
+  char sn[17];
+  int i;
+  uint16_t addr = EE_CAL_TX_IL;
+
+  RTOS_EEPROM_Read(EEPROM_ADDR, EE_TAG_SN, (uint8_t*)sn, 16);
+  sn[16] = 0;
+  if (!strncmp(sn, "303821", 6)) {
+    for (i = 0; i < 64; ++i) {
+      write_32_to_eeprom(EEPROM_ADDR, addr + i * 4, tx_il_table_for_303821[i]);
+    }
+    write_32_to_eeprom(EEPROM_ADDR, EE_CAL_LB_IL, lp_il_for_303821);
+    debug_Cmd_Check_Cali();
+  } else if (!strncmp(sn, "303822", 6)) {
+    for (i = 0; i < 64; ++i) {
+      write_32_to_eeprom(EEPROM_ADDR, addr + i * 4, tx_il_table_for_303822[i]);
+    }
+    write_32_to_eeprom(EEPROM_ADDR, EE_CAL_LB_IL, lp_il_for_303822);
+    debug_Cmd_Check_Cali();
+  }
+  return ;
+}

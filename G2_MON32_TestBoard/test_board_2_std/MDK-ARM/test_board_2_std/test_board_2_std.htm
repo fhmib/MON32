@@ -3,7 +3,7 @@
 <title>Static Call Graph - [test_board_2_std\test_board_2_std.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image test_board_2_std\test_board_2_std.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Sat Dec 19 17:00:14 2020
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Mon Jan 18 16:06:47 2021
 <BR><P>
 <H3>Maximum Stack Usage =        480 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
@@ -1493,7 +1493,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32f427xx.o(RESET)
 </UL>
-<P><STRONG><a name="[f4]"></a>MX_GPIO_Init</STRONG> (Thumb, 504 bytes, Stack size 64 bytes, gpio.o(i.MX_GPIO_Init))
+<P><STRONG><a name="[f4]"></a>MX_GPIO_Init</STRONG> (Thumb, 506 bytes, Stack size 64 bytes, gpio.o(i.MX_GPIO_Init))
 <BR><BR>[Stack]<UL><LI>Max Depth = 104<LI>Call Chain = MX_GPIO_Init &rArr; HAL_GPIO_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_Init
@@ -1977,6 +1977,7 @@ Global Symbols
 <LI><a href="#[a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_rx_pd_cali
 <LI><a href="#[13]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_reset
 <LI><a href="#[0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_power
+<LI><a href="#[15]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_performance
 <LI><a href="#[f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_modulation
 <LI><a href="#[d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_loopback
 <LI><a href="#[17]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_log
@@ -2039,12 +2040,13 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> main.o(.data)
 </UL>
-<P><STRONG><a name="[15]"></a>cmd_performance</STRONG> (Thumb, 892 bytes, Stack size 40 bytes, function.o(i.cmd_performance))
+<P><STRONG><a name="[15]"></a>cmd_performance</STRONG> (Thumb, 930 bytes, Stack size 40 bytes, function.o(i.cmd_performance))
 <BR><BR>[Stack]<UL><LI>Max Depth = 160<LI>Call Chain = cmd_performance &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[11a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buffer_To_BE32
 <LI><a href="#[102]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;serial_tx
 <LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_UART_Transmit
+<LI><a href="#[118]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_help2
 <LI><a href="#[a3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_i2d
 <LI><a href="#[99]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_ddiv
 <LI><a href="#[119]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;process_command
@@ -2232,7 +2234,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_for_debug
 </UL>
 
-<P><STRONG><a name="[11f]"></a>debug_cal</STRONG> (Thumb, 976 bytes, Stack size 104 bytes, function.o(i.debug_cal))
+<P><STRONG><a name="[11f]"></a>debug_cal</STRONG> (Thumb, 1196 bytes, Stack size 104 bytes, function.o(i.debug_cal))
 <BR><BR>[Stack]<UL><LI>Max Depth = 368<LI>Call Chain = debug_cal &rArr; __0sscanf &rArr; __vfscanf_char &rArr; __vfscanf &rArr; _scanf_real
 </UL>
 <BR>[Calls]<UL><LI><a href="#[14b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;BE32_To_Buffer
@@ -2285,8 +2287,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_for_debug
 </UL>
 
-<P><STRONG><a name="[11c]"></a>debug_dump</STRONG> (Thumb, 2468 bytes, Stack size 56 bytes, function.o(i.debug_dump))
-<BR><BR>[Stack]<UL><LI>Max Depth = 176<LI>Call Chain = debug_dump &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
+<P><STRONG><a name="[11c]"></a>debug_dump</STRONG> (Thumb, 2742 bytes, Stack size 64 bytes, function.o(i.debug_dump))
+<BR><BR>[Stack]<UL><LI>Max Depth = 184<LI>Call Chain = debug_dump &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[11a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buffer_To_BE32
 <LI><a href="#[14b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;BE32_To_Buffer
@@ -2354,7 +2356,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_for_debug
 </UL>
 
-<P><STRONG><a name="[131]"></a>debug_get_switch_channel</STRONG> (Thumb, 264 bytes, Stack size 32 bytes, function.o(i.debug_get_switch_channel))
+<P><STRONG><a name="[131]"></a>debug_get_switch_channel</STRONG> (Thumb, 282 bytes, Stack size 32 bytes, function.o(i.debug_get_switch_channel))
 <BR><BR>[Stack]<UL><LI>Max Depth = 152<LI>Call Chain = debug_get_switch_channel &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[14b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;BE32_To_Buffer
@@ -2486,7 +2488,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[1a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_for_debug
 </UL>
 
-<P><STRONG><a name="[130]"></a>debug_set_lp</STRONG> (Thumb, 94 bytes, Stack size 16 bytes, function.o(i.debug_set_lp))
+<P><STRONG><a name="[130]"></a>debug_set_lp</STRONG> (Thumb, 102 bytes, Stack size 16 bytes, function.o(i.debug_set_lp))
 <BR><BR>[Stack]<UL><LI>Max Depth = 136<LI>Call Chain = debug_set_lp &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[14b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;BE32_To_Buffer
@@ -2620,7 +2622,7 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[14]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;cmd_time
 </UL>
 
-<P><STRONG><a name="[13c]"></a>get_loopback_status</STRONG> (Thumb, 100 bytes, Stack size 16 bytes, function.o(i.get_loopback_status))
+<P><STRONG><a name="[13c]"></a>get_loopback_status</STRONG> (Thumb, 108 bytes, Stack size 16 bytes, function.o(i.get_loopback_status))
 <BR><BR>[Stack]<UL><LI>Max Depth = 136<LI>Call Chain = get_loopback_status &rArr; process_command &rArr; PRINT_HEX &rArr; HAL_UART_Transmit &rArr; UART_WaitOnFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[102]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;serial_tx

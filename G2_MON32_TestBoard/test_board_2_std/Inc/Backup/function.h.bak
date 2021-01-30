@@ -56,6 +56,8 @@ typedef enum {
   CMD_QUERY_MODULATION    = 0x26,
   CMD_QUERY_STATUS        = 0x27,
   CMD_QUERY_ALARM_HISTORY = 0x28,
+  CMD_QUERY_TOSA_STATUS   = 0x29,
+  CMD_SET_TOSA_WAVELENGTH = 0x2A,
   CMD_LOG_NUMBER          = 0x75,
   CMD_LOG_CONTENT         = 0x76,
   CMD_UPGRADE_MODE        = 0x80,
@@ -154,6 +156,8 @@ int8_t get_threshold(uint8_t argc, char **argv);
 int8_t cmd_log(uint8_t argc, char **argv);
 int8_t log_size(uint8_t argc, char **argv);
 int8_t log_content(uint8_t argc, char **argv);
+int8_t cmd_tosa_status(uint8_t argc, char **argv);
+int8_t cmd_set_tosa_wavelength(uint8_t argc, char **argv);
 
 int8_t cmd_for_debug(uint8_t argc, char **argv);
 int8_t debug_dac(uint8_t argc, char **argv);

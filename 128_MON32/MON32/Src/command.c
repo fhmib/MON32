@@ -17,7 +17,7 @@ UpgradeStruct up_state;
 
 char pn[17];
 char hw_version[5];
-char *fw_version = "S1.3"; // 4 bytes
+char *fw_version = "S1.4"; // 4 bytes
 
 extern osMessageQueueId_t mid_LazerManager;
 extern osMessageQueueId_t mid_CmdProcess;
@@ -206,6 +206,13 @@ uint8_t Cmd_Set_Switch(void)
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
+
+    if (run_status.tx_switch_channel == switch_pos) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as tx current channel\n");
+      FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
+    }
+
   } else if (switch_channel == RX_SWITCH_CHANNEL) {
     if (HAL_GPIO_ReadPin(SW2_MODE_SEL_GPIO_Port, SW2_MODE_SEL_Pin) == GPIO_PIN_RESET) {
       EPT("Switch 1x32 command come but switch mode is wrong\n");
@@ -220,6 +227,13 @@ uint8_t Cmd_Set_Switch(void)
       FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_INVALID_PARA, 0);
       return RESPOND_INVALID_PARA;
     }
+
+    if (run_status.rx_switch_channel == switch_pos) {
+      THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as rx current channel\n");
+      FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
+      return RESPOND_SUCCESS;
+    }
+
   } else {
     EPT("Switch command parameter is invalid\n");
     THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch command parameter is invalid\n");
@@ -228,8 +242,8 @@ uint8_t Cmd_Set_Switch(void)
   }
   
   if (run_status.tx_block && switch_channel == TX_SWITCH_CHANNEL) {
-    //THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked\n\n");
-    run_status.tx_switch_channel = switch_pos;
+    THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked by SW1_BLOCK\n");
+    //run_status.tx_switch_channel = switch_pos;
     FILL_RESP_MSG(CMD_SET_SWITCH, RESPOND_SUCCESS, 0);
     return RESPOND_SUCCESS;
   }
@@ -263,7 +277,7 @@ uint8_t Cmd_Set_Switch(void)
 
   // Check
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-    Reset_Switch(switch_channel);
+    Reset_Switch_Only(switch_channel);
     EPT("Set switch channel failed 2\n");
     THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
     osMutexRelease(swMutex);
@@ -691,7 +705,7 @@ uint8_t Cmd_Upgrade_Data()
         } else {
           EPT("Flash in using for other functions...\n");
           THROW_LOG(MSG_TYPE_NORMAL_LOG, "Flash in using for other functions...\n");
-          osDelay(pdMS_TO_TICKS(600));
+          osDelay(pdMS_TO_TICKS(300));
           FILL_RESP_MSG(CMD_UPGRADE_DATA, RESPOND_FAILURE, 0);
           return RESPOND_FAILURE;
         }
@@ -745,7 +759,7 @@ uint8_t Cmd_Upgrade_Data()
   }
 
   while (flash_in_use && to++ < 6) {
-    osDelay(pdMS_TO_TICKS(100));
+    osDelay(pdMS_TO_TICKS(50));
   }
   if (to >= 6) {
     if (seq == 1) {

@@ -284,7 +284,7 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
       temp_first = temp;
       i++;
     } else {
-      if (temp >= temp_first - 0.2 && temp <= temp_first + 0.2) {
+      if (temp >= temp_first - 0.1 && temp <= temp_first + 0.1) {
         i++;
       } else {
         i = 0;
@@ -959,6 +959,11 @@ void Reset_Switch(uint8_t switch_channel)
       index = Get_Index_Of_Channel_Map(switch_channel, pos);
       Clear_Switch_Dac(channel_map[index].first_switch);
       Clear_Switch_Dac(channel_map[index].second_switch);
+      if (switch_channel == TX_SWITCH_CHANNEL) {
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+      } else {
+        Set_Switch_Ready(RX_SWITCH_CHANNEL);
+      }
     }
 
     if (switch_channel == TX_SWITCH_CHANNEL) {
@@ -979,6 +984,8 @@ void Reset_Switch(uint8_t switch_channel)
     Clear_Switch_Dac(SWITCH_NUM_8);
     run_status.tx_switch_channel = 0xFF;
     run_status.rx_switch_channel = 0xFF;
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
   }
 }
 
@@ -1179,6 +1186,8 @@ uint8_t Disable_Tosa()
 
   status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
   status |= RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  DAC5541_Write(0);
 
   if (status != osOK) {
     Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
@@ -2743,7 +2752,7 @@ uint8_t debug_set_lp(uint32_t which)
 
   // Check
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-    Reset_Switch(switch_channel);
+    Reset_Switch_Only(switch_channel);
     return RESPOND_FAILURE;
   }
 

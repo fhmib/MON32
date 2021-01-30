@@ -66,21 +66,22 @@ typedef enum {
   EE_CAL_SWITCH2          = 0x1030,
   EE_CAL_SWITCH3          = 0x1090,
   EE_CAL_SWITCH4          = 0x10F0,
-  EE_CAL_SWITCH5          = 0x1150,
+  EE_CAL_SWITCH5          = 0x1700,
   EE_CAL_SWITCH6          = 0x1170,
   EE_CAL_SWITCH7          = 0x11D0,
   EE_CAL_SWITCH8          = 0x1230,
   EE_CAL_TOSA1            = 0x1290,
   EE_CAL_TX_IL            = 0x1350,
   EE_CAL_RX_IL            = 0x1450,
-  EE_CAL_LB_IL_C98        = 0x14D0,
-  EE_CAL_LB_IL_C122       = 0x14D4,
-  EE_CAL_RX_PD_C98        = 0x1500,
-  EE_TEC_DEF_TEMP         = 0x1550,
-  EE_CAL_TOSA2            = 0x1570,
-  EE_CAL_RX_PD_C122       = 0x1630,
+  EE_CAL_LB_IL_C98        = 0x1550,
+  EE_CAL_LB_IL_C122       = 0x1554,
+  EE_CAL_RX_PD_C98        = 0x1580,
+  EE_TEC_DEF_TEMP_C98     = 0x15D0,
+  EE_TEC_DEF_TEMP_C122    = 0x15D4,
+  EE_CAL_TOSA2            = 0x15F0,
+  EE_CAL_RX_PD_C122       = 0x16B0,
   // Parameter Table end Address
-  EE_PARA_TABLE_END       = 0x167F,
+  EE_PARA_TABLE_END       = 0x172F,
   // Alarm
   EE_ALARM_HISTORY        = 0x2000,
   // upgrade
@@ -276,14 +277,14 @@ typedef enum {
   OSC_FAILURE_C98   = 1,
   OSC_FAILURE_C122  = 2,
   OSC_ONGOING       = 3,
-  OSC_TXSW_CHAN1    = 4, // Indicates if switch txsw to channel 1 after self-check
+//  OSC_TXSW_CHAN1    = 4, // Indicates if switch txsw to channel 1 after self-check
 } OpticalSelfCheckStatus;
 
 typedef struct {
   uint32_t maigc;
   uint8_t uart_reset; // Indicate if reset by uart communication
   uint8_t tx_switch_channel; // 0-31: C98 1-32   32-63: C122 1-32   64-65: C98-C122 33   0xFF: none
-  uint8_t rx_switch_channel; // 0-31: 1 to 1-32   32: 1 to 33   0xFF: none
+  uint8_t rx_switch_channel; // 0-31: C98 1-32   32-63: C122 1-32   64-65: C98-C122 33   0xFF: none
   uint8_t tx_block;
   uint8_t tosa_enable;
   uint8_t tosa_C122; // 0: C98 is using 1: C122 is using
@@ -403,7 +404,7 @@ uint8_t debug_cal_switch(uint8_t sw_num, uint32_t chan, int32_t val_x, int32_t v
 uint8_t debug_cal_tosa(uint8_t num, uint32_t tosa_dac, uint32_t tec_dac, uint32_t pd_adc, int32_t pd);
 uint8_t debug_get_tosa_val(int32_t val, uint32_t *resp_len);
 uint8_t debug_cal_il(uint8_t num, int32_t val);
-uint8_t debug_cal_default_temp(int32_t val);
+uint8_t debug_cal_default_temp(uint32_t which, int32_t val);
 uint8_t debug_cal_rx_pd(uint8_t num, uint32_t adc, int32_t val);
 uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len);
 uint8_t debug_eeprom(uint32_t addr, uint32_t *len);

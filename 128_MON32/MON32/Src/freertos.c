@@ -501,7 +501,13 @@ void isrTask(void *argument)
       }
       
       if (run_status.tx_block) {
-        run_status.tx_switch_channel = switch_pos;
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked by SW1_BLOCK\n");
+        // run_status.tx_switch_channel = switch_pos;
+        continue;
+      }
+
+      if (run_status.tx_switch_channel == switch_pos) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as tx current channel\n");
         continue;
       }
 
@@ -523,7 +529,7 @@ void isrTask(void *argument)
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-        Reset_Switch(switch_channel);
+        Reset_Switch_Only(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         osMutexRelease(swMutex);
         continue;
@@ -538,6 +544,11 @@ void isrTask(void *argument)
       if (switch_pos >= 0x20) {
         EPT("Invalid switch position = %u [io]\n", switch_pos);
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Invalid switch position = %u [io]\n", switch_pos);
+        continue;
+      }
+
+      if (run_status.rx_switch_channel == switch_pos) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as rx current channel\n");
         continue;
       }
 
@@ -559,7 +570,7 @@ void isrTask(void *argument)
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-        Reset_Switch(switch_channel);
+        Reset_Switch_Only(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         osMutexRelease(swMutex);
         continue;
@@ -571,6 +582,8 @@ void isrTask(void *argument)
       if (run_status.osc_status == OSC_ONGOING) {
         msg.type = MSG_TYPE_SELF_TEST_STEP_2;
         msg.pbuf = NULL;
+        Clear_Switch_Ready(TX_SWITCH_CHANNEL);
+        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
 
         if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
@@ -580,7 +593,6 @@ void isrTask(void *argument)
         }
 
         // Switch Loopback
-        Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (Set_Switch(TX_SWITCH_CHANNEL, 64)) {
           run_status.tx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
@@ -599,7 +611,6 @@ void isrTask(void *argument)
           continue;
         }
 
-        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
         if (Set_Switch(RX_SWITCH_CHANNEL, 32)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
@@ -626,10 +637,9 @@ void isrTask(void *argument)
           continue;
         }
 
-        Clear_Switch_Ready(TX_SWITCH_CHANNEL);
         if (run_status.tx_block) {
           Reset_Switch_Only(TX_SWITCH_CHANNEL);
-          run_status.tx_switch_channel = 0;
+          run_status.tx_switch_channel = 0xFF;
         } else {
           if (Set_Switch(TX_SWITCH_CHANNEL, 0)) {
             run_status.tx_switch_channel = 0xFF;
@@ -647,7 +657,6 @@ void isrTask(void *argument)
           Set_Switch_Ready(TX_SWITCH_CHANNEL);
         }
 
-        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
@@ -669,9 +678,13 @@ void isrTask(void *argument)
           continue;
         }
 
-        Reset_Switch(TX_SWITCH_CHANNEL);
+        Reset_Switch_Only(TX_SWITCH_CHANNEL);
+        run_status.tx_switch_channel = 0xFF;
+        if (!run_status.tx_block) {
+          Set_Switch_Ready(TX_SWITCH_CHANNEL);
+        }
 
-        Clear_Switch_Ready(RX_SWITCH_CHANNEL);
+
         if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
           run_status.rx_switch_channel = 0xFF;
           THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
@@ -907,12 +920,19 @@ void monitorTask(void *argument)
     run_status.rx_switch_channel = 0;
     // Check
     if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
-      Reset_Switch(RX_SWITCH_CHANNEL);
+      Reset_Switch_Only(RX_SWITCH_CHANNEL);
     } else {
       Set_Switch_Ready(RX_SWITCH_CHANNEL);
     }
+  } else {
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
+  }
+  
+  if (!run_status.tx_block) {
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
   }
 
+  //write_cali_to_e2();
   device_busy = 0;
 
   for (;;) {
@@ -920,11 +940,15 @@ void monitorTask(void *argument)
     if (HAL_GPIO_ReadPin(SW1_BLOCK_GPIO_Port, SW1_BLOCK_Pin) == GPIO_PIN_RESET) {
       if (!run_status.tx_block) {
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
-        Reset_Switch_Only(TX_SWITCH_CHANNEL);
+        if (run_status.tx_switch_channel != 0xFF) {
+          Reset_Switch_Only(TX_SWITCH_CHANNEL);
+          run_status.tx_switch_channel = 0xFF;
+        }
         run_status.tx_block = 1;
       }
     } else {
       if (run_status.tx_block) {
+#if 0
         if (run_status.tx_switch_channel != 0xFF) {
           if (Set_Switch(TX_SWITCH_CHANNEL, run_status.tx_switch_channel)) {
             THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
@@ -941,6 +965,9 @@ void monitorTask(void *argument)
             Set_Switch_Ready(TX_SWITCH_CHANNEL);
           }
         }
+#else
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+#endif
         run_status.tx_block = 0;
       }
     }
@@ -1225,6 +1252,9 @@ void lazerManagerTask(void *argument)
       continue;
 
     if (msg.type == MSG_TYPE_LAZER_ENABLE) {
+      run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+      run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+
       if (run_status.modulation) {
         status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
         if (run_status.power_mode) {
@@ -1244,7 +1274,7 @@ void lazerManagerTask(void *argument)
         continue;
       }
       osDelay(pdMS_TO_TICKS(100));
-
+#if 0
       if (!run_status.modulation) {
         if (Cali_Power(run_status.tosa_dst_power_high)) {
           allow_tosa = 0;
@@ -1254,7 +1284,7 @@ void lazerManagerTask(void *argument)
           continue;
         }
       }
-      
+#endif
       Set_Lazer_Ready();
 
       i = 0;

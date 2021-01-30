@@ -284,7 +284,7 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
       temp_first = temp;
       i++;
     } else {
-      if (temp >= temp_first - 0.2 && temp <= temp_first + 0.2) {
+      if (temp >= temp_first - 0.1 && temp <= temp_first + 0.1) {
         i++;
       } else {
         i = 0;
@@ -925,6 +925,12 @@ void Reset_Switch(uint8_t switch_channel)
     } else {
       run_status.rx_switch_channel = 0xFF;
     }
+
+    if (switch_channel == TX_SWITCH_CHANNEL) {
+      Set_Switch_Ready(TX_SWITCH_CHANNEL);
+    } else {
+      Set_Switch_Ready(RX_SWITCH_CHANNEL);
+    }
   } else {
     Clear_Switch_Ready(TX_SWITCH_CHANNEL);
     Clear_Switch_Ready(RX_SWITCH_CHANNEL);
@@ -938,6 +944,8 @@ void Reset_Switch(uint8_t switch_channel)
     Clear_Switch_Dac(SWITCH_NUM_8);
     run_status.tx_switch_channel = 0xFF;
     run_status.rx_switch_channel = 0xFF;
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
   }
 }
 
@@ -1138,6 +1146,8 @@ uint8_t Disable_Tosa()
 
   status = RTOS_DAC128S085_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
   status |= RTOS_DAC128S085_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+  status |= RTOS_DAC128S085_Write(DAC128S085_TOSA_POWER_CHANNEL, 0, DAC128S085_MODE_NORMAL);
 
   if (status != osOK) {
     Set_Flag(&run_status.internal_exp, INT_EXP_OS_ERR);
@@ -1761,7 +1771,7 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
       }
       break;
     case 0xF:
-      if (run_status.tx_block || run_status.tx_switch_channel >= 64) {
+      if (run_status.tx_block || run_status.tx_switch_channel >= 32) {
         BE32_To_Buffer(0x80000000, pBuf);
       } else {
         u_val8 = get_tap_pd_power(&u_val16, &d_val);
@@ -1807,7 +1817,7 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
       }
       break;
     case 0x11:
-      if (run_status.tx_block || run_status.tx_switch_channel >= 64) {
+      if (run_status.tx_block || run_status.tx_switch_channel >= 32) {
         val32 = -60 * 100;
         BE32_To_Buffer(val32, pBuf);
       } else {

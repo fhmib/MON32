@@ -528,12 +528,18 @@ void isrTask(void *argument)
       }
 
       if (run_status.tx_block) {
-        run_status.tx_switch_channel = switch_pos;
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Switch is blocked by SW1_BLOCK\n");
+        // run_status.tx_switch_channel = switch_pos;
         continue;
       }
       
       if (run_status.tosa_C122) {
         switch_pos += 32;
+      }
+      
+      if (run_status.tx_switch_channel == switch_pos) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as tx current channel\n");
+        continue;
       }
 
       if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
@@ -553,7 +559,7 @@ void isrTask(void *argument)
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-        Reset_Switch(switch_channel);
+        Reset_Switch_Only(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         osMutexRelease(swMutex);
         continue;
@@ -568,6 +574,15 @@ void isrTask(void *argument)
       if (switch_pos >= 0x20) {
         EPT("Invalid switch position = %u [io]\n", switch_pos);
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Invalid switch position = %u [io]\n", switch_pos);
+        continue;
+      }
+
+      if (run_status.tosa_C122) {
+        switch_pos += 32;
+      }
+
+      if (run_status.rx_switch_channel == switch_pos) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "Same as rx current channel\n");
         continue;
       }
 
@@ -588,7 +603,7 @@ void isrTask(void *argument)
 
       // Check
       if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-        Reset_Switch(switch_channel);
+        Reset_Switch_Only(switch_channel);
         THROW_LOG(MSG_TYPE_NORMAL_LOG, "Check Switch abnormal\n");
         osMutexRelease(swMutex);
         continue;
@@ -599,6 +614,8 @@ void isrTask(void *argument)
     } else if (msg.type == MSG_TYPE_SELF_CHECK_SWITCH_STEP_1) {
       msg.type = MSG_TYPE_SELF_TEST_STEP_2;
       msg.pbuf = NULL;
+      Clear_Switch_Ready(TX_SWITCH_CHANNEL);
+      Clear_Switch_Ready(RX_SWITCH_CHANNEL);
 
       if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
@@ -612,7 +629,6 @@ void isrTask(void *argument)
       }
 
       // Switch Loopback
-      Clear_Switch_Ready(TX_SWITCH_CHANNEL);
       if (run_status.tosa_C122) {
         switch_pos = 65;
       } else {
@@ -644,8 +660,7 @@ void isrTask(void *argument)
         continue;
       }
 
-      Clear_Switch_Ready(RX_SWITCH_CHANNEL);
-      if (Set_Switch(RX_SWITCH_CHANNEL, 32)) {
+      if (Set_Switch(RX_SWITCH_CHANNEL, switch_pos)) {
         run_status.rx_switch_channel = 0xFF;
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
         if (run_status.tosa_C122) {
@@ -657,9 +672,9 @@ void isrTask(void *argument)
         osMessageQueuePut(mid_LazerManager, &msg, 0U, 0U);
         continue;
       }
-      run_status.rx_switch_channel = 32;
+      run_status.rx_switch_channel = switch_pos;
       // Check
-      if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 32) {
+      if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != switch_pos) {
         THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
         if (run_status.tosa_C122) {
           Set_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
@@ -680,32 +695,12 @@ void isrTask(void *argument)
         continue;
       }
 
+#if 0
       if (Is_Flag_Set(&run_status.osc_flag, OSC_TXSW_CHAN1)) {
         if (run_status.tosa_C122) {
           if (!Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C122)) {
-            // C122 self-check success, switch txsw to channel 1
-            switch_pos = 0 + 32;
-            if (run_status.tx_block) {
-              Reset_Switch_Only(TX_SWITCH_CHANNEL);
-              run_status.tx_switch_channel = switch_pos;
-            } else {
-              if (Set_Switch(TX_SWITCH_CHANNEL, switch_pos)) {
-                run_status.tx_switch_channel = 0xFF;
-                THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
-                osMutexRelease(swMutex);
-                osSemaphoreRelease(optCpltSemaphore);
-                continue;
-              }
-              run_status.tx_switch_channel = switch_pos;
-              // Check
-              if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != switch_pos) {
-                THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
-                osMutexRelease(swMutex);
-                osSemaphoreRelease(optCpltSemaphore);
-                continue;
-              }
-              Set_Switch_Ready(TX_SWITCH_CHANNEL);
-            }
+            // C122 self-check success, switch txsw to BLOCK
+            Reset_Switch(TX_SWITCH_CHANNEL);
           } else {
             // C122 self-check failed, switch txsw to BLOCK
             Reset_Switch(TX_SWITCH_CHANNEL);
@@ -759,7 +754,38 @@ void isrTask(void *argument)
         }
         Set_Switch_Ready(RX_SWITCH_CHANNEL);
       }
+#else
+      // Switch txsw to BLOCK
+      Reset_Switch_Only(TX_SWITCH_CHANNEL);
+      run_status.tx_switch_channel = 0xFF;
+      if (!run_status.tx_block) {
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+      }
+      
+      // Switch rxsw to channel 1
+      if (run_status.tosa_C122) {
+        switch_pos = 32;
+      } else {
+        switch_pos = 0;
+      }
 
+      if (Set_Switch(RX_SWITCH_CHANNEL, switch_pos)) {
+        run_status.rx_switch_channel = 0xFF;
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed\n");
+        osMutexRelease(swMutex);
+        osSemaphoreRelease(optCpltSemaphore);
+        continue;
+      }
+      run_status.rx_switch_channel = switch_pos;
+      // Check
+      if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != switch_pos) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Rx Switch failed 2\n");
+        osMutexRelease(swMutex);
+        osSemaphoreRelease(optCpltSemaphore);
+        continue;
+      }
+      Set_Switch_Ready(RX_SWITCH_CHANNEL);
+#endif
       osMutexRelease(swMutex);
       osSemaphoreRelease(optCpltSemaphore);
     }
@@ -968,23 +994,35 @@ void monitorTask(void *argument)
 {
   osStatus_t status;
   uint16_t value;
-  uint8_t ret;
+  uint8_t ret, switch_pos;
   double voltage, temp;
   MsgStruct msg;
 
   osDelay(pdMS_TO_TICKS(500));
 
   if (!(IS_RESETFLAG_SET(SFT_RESET_BIT) || IS_RESETFLAG_SET(IWDG_RESET_BIT))) {
-    if (Set_Switch(RX_SWITCH_CHANNEL, 0)) {
+    if (run_status.tosa_C122) {
+      switch_pos = 32;
+    } else {
+      switch_pos = 0;
+    }
+
+    if (Set_Switch(RX_SWITCH_CHANNEL, switch_pos)) {
       run_status.rx_switch_channel = 0xFF;
     }
-    run_status.rx_switch_channel = 0;
+    run_status.rx_switch_channel = switch_pos;
     // Check
-    if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != 0) {
-      Reset_Switch(RX_SWITCH_CHANNEL);
+    if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != switch_pos) {
+      Reset_Switch_Only(RX_SWITCH_CHANNEL);
     } else {
       Set_Switch_Ready(RX_SWITCH_CHANNEL);
     }
+  } else {
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
+  }
+  
+  if (!run_status.tx_block) {
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
   }
 
   device_busy = 0;
@@ -994,11 +1032,15 @@ void monitorTask(void *argument)
     if (HAL_GPIO_ReadPin(SW1_BLOCK_GPIO_Port, SW1_BLOCK_Pin) == GPIO_PIN_RESET) {
       if (!run_status.tx_block) {
         Clear_Switch_Ready(TX_SWITCH_CHANNEL);
-        Reset_Switch_Only(TX_SWITCH_CHANNEL);
+        if (run_status.tx_switch_channel != 0xFF) {
+          Reset_Switch_Only(TX_SWITCH_CHANNEL);
+          run_status.tx_switch_channel = 0xFF;
+        }
         run_status.tx_block = 1;
       }
     } else {
       if (run_status.tx_block) {
+#if 0
         if (run_status.tx_switch_channel != 0xFF) {
           if (run_status.tx_switch_channel < 0x20 && run_status.tosa_C122) {
             run_status.tx_switch_channel += 0x20;
@@ -1023,6 +1065,9 @@ void monitorTask(void *argument)
             }
           }
         }
+#else
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+#endif
         run_status.tx_block = 0;
       }
     }
@@ -1389,7 +1434,7 @@ void lazerManagerTask(void *argument)
         continue;
       }
       osDelay(pdMS_TO_TICKS(100));
-
+#if 0
       if (!run_status.modulation) {
         if (Cali_Power(run_status.tosa_dst_power_high)) {
           allow_tosa = 0;
@@ -1399,7 +1444,7 @@ void lazerManagerTask(void *argument)
           continue;
         }
       }
-      
+#endif
       Set_Lazer_Ready();
 
       i = 0;
@@ -1626,8 +1671,6 @@ void lazerManagerTask(void *argument)
       //*(uint8_t*)msg.pbuf = 0;
       //osMessageQueuePut(mid_CmdProcess, &msg, 0U, 0U);
     } else if (msg.type == MSG_TYPE_SELF_TEST) {
-      Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
-      Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C98);
       msg.type = MSG_TYPE_SELF_CHECK_SWITCH_STEP_1;
       msg.pbuf = NULL;
       osMessageQueuePut(mid_ISR, &msg, 0U, 0U);
@@ -1762,6 +1805,8 @@ void lazerManagerTask(void *argument)
 void lazerManager2Task(void *argument)
 {
   osStatus_t status;
+  // uint8_t switch_flag = 0, switch_pos;
+  uint8_t switch_pos;
   MsgStruct msg, txmsg;
 
   txmsg.length = 0;
@@ -1776,6 +1821,11 @@ void lazerManager2Task(void *argument)
     osSemaphoreAcquire(optCpltSemaphore, 0);
 
     if (msg.type == MSG_TYPE_SWITCH_WAVELENGTH) {
+      if (osMutexAcquire(swMutex, 500) != osOK) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed while switching wavelength\n");
+        continue;
+      }
+
       // disable tx switch
       if (run_status.tx_switch_channel != 0xFF) {
         if (run_status.tx_block) {
@@ -1785,7 +1835,9 @@ void lazerManager2Task(void *argument)
         }
       }
 
+
       if (run_status.tosa_enable) {
+        osMutexRelease(swMutex);
         run_status.tosa_is_switching = 1;
         
         // disable current tosa
@@ -1804,7 +1856,7 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(2), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
@@ -1836,8 +1888,10 @@ void lazerManager2Task(void *argument)
           }
           
           if (run_status.tosa_C122) {
+            Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C98);
             Set_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
           } else {
+            Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
             Set_Flag(&run_status.osc_flag, OSC_FAILURE_C98);
           }
 
@@ -1849,7 +1903,9 @@ void lazerManager2Task(void *argument)
         // Start self-checking
         Set_Flag(&run_status.osc_flag, OSC_INIT);
         Set_Flag(&run_status.osc_flag, OSC_ONGOING);
-        Clear_Flag(&run_status.osc_flag, OSC_TXSW_CHAN1);
+        // Clear_Flag(&run_status.osc_flag, OSC_TXSW_CHAN1);
+        Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
+        Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C98);
 
         //  Clear alarm
         if (Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
@@ -1866,7 +1922,7 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(3), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
@@ -1881,6 +1937,32 @@ void lazerManager2Task(void *argument)
         }
       } else {
         run_status.tosa_C122 = run_status.tosa_C122 == 1 ? 0 : 1;
+
+        if (run_status.rx_switch_channel < 64) {
+          if (run_status.tosa_C122) {
+            switch_pos = run_status.rx_switch_channel % 32 + 32;
+          } else {
+            switch_pos = run_status.rx_switch_channel % 32;
+          }
+          Clear_Switch_Ready(RX_SWITCH_CHANNEL);
+          if (Set_Switch(RX_SWITCH_CHANNEL, switch_pos)) {
+            run_status.rx_switch_channel = 0xFF;
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed\n");
+            osMutexRelease(swMutex);
+          }
+          run_status.rx_switch_channel = switch_pos;
+          // Check
+          if (Get_Current_Switch_Channel(RX_SWITCH_CHANNEL) != switch_pos) {
+            Reset_Switch_Only(RX_SWITCH_CHANNEL);
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set switch channel failed 2\n");
+            osMutexRelease(swMutex);
+          }
+          Set_Switch_Ready(RX_SWITCH_CHANNEL);
+        }
+        osMutexRelease(swMutex);
+
+        Reset_Tec_Dest_Temp(&run_status.thr_table);
+
         if (run_status.modulation) {
           if (run_status.tosa_C122) {
             HAL_TIM_IC_Stop_IT(&htim8, TIM_CHANNEL_1);
@@ -1899,7 +1981,9 @@ void lazerManager2Task(void *argument)
       run_status.tosa_is_switching = 1;
       Set_Flag(&run_status.osc_flag, OSC_INIT);
       Set_Flag(&run_status.osc_flag, OSC_ONGOING);
-      Set_Flag(&run_status.osc_flag, OSC_TXSW_CHAN1);
+      // Set_Flag(&run_status.osc_flag, OSC_TXSW_CHAN1);
+      Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C122);
+      Clear_Flag(&run_status.osc_flag, OSC_FAILURE_C98);
 
       //  Clear alarm
       if (Is_Flag_Set(&run_status.exp, EXP_SELFCHECK)) {
@@ -1911,7 +1995,7 @@ void lazerManager2Task(void *argument)
       if (Is_Flag_Set(&run_status.exp, EXP_SWITCH)) {
         Clear_Flag(&run_status.exp, EXP_SWITCH);
       }
-
+#if 0
       // Switch wavelength to C98
       if (run_status.tosa_C122) {
         // disable current tosa
@@ -1919,7 +2003,7 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(4), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
@@ -1930,21 +2014,26 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(5), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
+        
+      } else {
+        switch_flag = 1;
       }
+#endif
       
       txmsg.type = MSG_TYPE_SELF_TEST;
       osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
       status = osSemaphoreAcquire(optCpltSemaphore, 1000);
       if (status != osOK) {
-        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(6), status = %#X\n", status);
         run_status.tosa_is_switching = 0;
+        //switch_flag = 0;
         continue;
       }
-      
+#if 0
       // Switch wavelength to C122
       if (!run_status.tosa_C122) {
         // disable current tosa
@@ -1952,7 +2041,53 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(7), status = %#X\n", status);
+          run_status.tosa_is_switching = 0;
+          switch_flag = 0;
+          continue;
+        }
+        
+        // enable another tosa
+        run_status.tosa_C122 = run_status.tosa_C122 == 1 ? 0 : 1;
+        txmsg.type = MSG_TYPE_LAZER_ENABLE;
+        osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
+        status = osSemaphoreAcquire(optCpltSemaphore, 1000);
+        if (status != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(8), status = %#X\n", status);
+          run_status.tosa_is_switching = 0;
+          switch_flag = 0;
+          continue;
+        }
+      }
+      
+      txmsg.type = MSG_TYPE_SELF_TEST;
+      osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
+      status = osSemaphoreAcquire(optCpltSemaphore, 1000);
+      if (status != osOK) {
+        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(9), status = %#X\n", status);
+        run_status.tosa_is_switching = 0;
+        switch_flag = 0;
+        continue;
+      }
+#endif
+      Clear_Flag(&run_status.osc_flag, OSC_ONGOING);
+      
+      if (Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C98)) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "C98 optical self-check failed\n");
+      }
+      if (Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C122)) {
+        THROW_LOG(MSG_TYPE_NORMAL_LOG, "C122 optical self-check failed\n");
+      }
+#if 0
+      // Switch wavelength to C98
+      if (switch_flag) {
+        switch_flag = 0;
+        // disable current tosa
+        txmsg.type = MSG_TYPE_LAZER_DISABLE;
+        osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
+        status = osSemaphoreAcquire(optCpltSemaphore, 1000);
+        if (status != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(10), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
@@ -1963,30 +2098,50 @@ void lazerManager2Task(void *argument)
         osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
         status = osSemaphoreAcquire(optCpltSemaphore, 1000);
         if (status != osOK) {
-          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(11), status = %#X\n", status);
           run_status.tosa_is_switching = 0;
           continue;
         }
       }
-      
-      txmsg.type = MSG_TYPE_SELF_TEST;
-      osMessageQueuePut(mid_LazerManager, &txmsg, 0U, 0U);
-      status = osSemaphoreAcquire(optCpltSemaphore, 1000);
-      if (status != osOK) {
-        THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire semaphore of LazerManager failed(1), status = %#X\n", status);
-        run_status.tosa_is_switching = 0;
-        continue;
-      }
-      
-      Clear_Flag(&run_status.osc_flag, OSC_ONGOING);
+#endif
       run_status.tosa_is_switching = 0;
       
-      if (Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C98)) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "C98 optical self-check failed\n");
+#if 0
+      if ((run_status.tosa_C122 && !Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C122)) || \
+            (!run_status.tosa_C122 && !Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C98))) {
+        if ((status = osMutexAcquire(swMutex, 50)) != osOK) {
+          THROW_LOG(MSG_TYPE_ERROR_LOG, "Acquire mutex of sw failed\n");
+          continue;
+        }
+        
+        if (run_status.tosa_C122) {
+          switch_pos = 32;
+        } else {
+          switch_pos = 0;
+        }
+
+        if (run_status.tx_block) {
+          Reset_Switch_Only(TX_SWITCH_CHANNEL);
+          run_status.tx_switch_channel = switch_pos;
+        } else {
+          if (Set_Switch(TX_SWITCH_CHANNEL, switch_pos)) {
+            run_status.tx_switch_channel = 0xFF;
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed\n");
+            osMutexRelease(swMutex);
+            continue;
+          }
+          run_status.tx_switch_channel = switch_pos;
+          // Check
+          if (Get_Current_Switch_Channel(TX_SWITCH_CHANNEL) != switch_pos) {
+            THROW_LOG(MSG_TYPE_ERROR_LOG, "Set Tx Switch failed 2\n");
+            osMutexRelease(swMutex);
+            continue;
+          }
+          Set_Switch_Ready(TX_SWITCH_CHANNEL);
+        }
+        osMutexRelease(swMutex);
       }
-      if (Is_Flag_Set(&run_status.osc_flag, OSC_FAILURE_C122)) {
-        THROW_LOG(MSG_TYPE_NORMAL_LOG, "C122 optical self-check failed\n");
-      }
+#endif
     }
   }
 }

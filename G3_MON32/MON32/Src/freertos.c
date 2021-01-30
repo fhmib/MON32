@@ -1224,6 +1224,9 @@ void lazerManagerTask(void *argument)
       continue;
 
     if (msg.type == MSG_TYPE_LAZER_ENABLE) {
+      run_status.tosa_high = Get_Tosa_Data(run_status.tosa_dst_power_high);
+      run_status.tosa_low = Get_Tosa_Data(run_status.tosa_dst_power_low);
+
       if (run_status.modulation) {
         status = RTOS_DAC128S085_Write(DAC128S085_TEC_VALUE_CHANNEL, (run_status.tosa_high.tec_dac + run_status.tosa_low.tec_dac) / 2, DAC128S085_MODE_NORMAL);
         if (run_status.power_mode) {

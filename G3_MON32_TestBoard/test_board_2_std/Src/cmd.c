@@ -13,10 +13,10 @@ int8_t cmd_help(uint8_t argc, char **argv)
   for (i=0; i < cmd_count; ++i) {
     if (!strcmp(cmdlist[i].info, "INTERNAL")) continue;
 
-    buf[12 - strlen(cmdlist[i].cmd)] = 0;
+    buf[16 - strlen(cmdlist[i].cmd)] = 0;
     PRINT("cmd: ");
     PRINT("%s%s- %s\r\n", cmdlist[i].cmd, buf, cmdlist[i].desc);
-    buf[12 - strlen(cmdlist[i].cmd)] = ' ';
+    buf[16 - strlen(cmdlist[i].cmd)] = ' ';
     HAL_Delay(30);
   }
   return 0;

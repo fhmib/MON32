@@ -288,7 +288,7 @@ osStatus_t Update_Tec_Dest_Temp(ThresholdStruct *table)
       temp_first = temp;
       i++;
     } else {
-      if (temp >= temp_first - 0.2 && temp <= temp_first + 0.2) {
+      if (temp >= temp_first - 0.1 && temp <= temp_first + 0.1) {
         i++;
       } else {
         i = 0;
@@ -314,7 +314,11 @@ osStatus_t Reset_Tec_Dest_Temp(ThresholdStruct *table)
   int32_t value;
   double temp;
 
-  status = get_32_from_eeprom(EEPROM_ADDR, EE_TEC_DEF_TEMP, (uint32_t*)&value);
+  if (run_status.tosa_C122) {
+    status = get_32_from_eeprom(EEPROM_ADDR, EE_TEC_DEF_TEMP_C122, (uint32_t*)&value);
+  } else {
+    status = get_32_from_eeprom(EEPROM_ADDR, EE_TEC_DEF_TEMP_C98, (uint32_t*)&value);
+  }
   if (status != osOK) {
     return status;
   }
@@ -469,14 +473,10 @@ uint8_t Get_Switch_Position_By_IO(uint8_t switch_channel)
 
 /* 
  *  switch_pos
- *      channel = 0
  *        0-31: C98 1-32
  *        32-63: C122 1-32
  *        64: C98 33
  *        65: C122 33
- *      channel = 1
- *        0-31: 1*32Switch 1 to 32
- *        32: rx 1*32Switch 1 to 33
  */
 int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
 {
@@ -492,7 +492,7 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
   int32_t safe_dist = 1000;
 
   if (   (switch_channel == TX_SWITCH_CHANNEL && switch_pos >= 66) \
-      || (switch_channel == RX_SWITCH_CHANNEL && switch_pos >= 33) \
+      || (switch_channel == RX_SWITCH_CHANNEL && switch_pos >= 66) \
       || (switch_channel > 1)) {
     return -1;
   }
@@ -542,7 +542,7 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
       addr = channel_map[index].second_eeprom_addr + 10 * 8;
     }
   } else {
-    if (switch_pos < 32) {
+    if (switch_pos < 64) {
       addr = channel_map[index].second_eeprom_addr + ((switch_pos % 32 + 1) - channel_map[index].min_channel_num) * 8;
     } else {
       addr = channel_map[index].second_eeprom_addr + 10 * 8;
@@ -574,7 +574,11 @@ int8_t Set_Switch(uint8_t switch_channel, uint8_t switch_pos)
       addr = channel_map[index].first_eeprom_addr + 3 * 8 + index * 8;
     }
   } else {
-    addr = channel_map[index].first_eeprom_addr + (index - 3) * 8;
+    if (switch_pos < 32 || switch_pos == 64) {
+      addr = channel_map[index].first_eeprom_addr + (index - 3) * 8;
+    } else {
+      addr = channel_map[index].first_eeprom_addr + 3 * 8 + (index - 3) * 8;
+    }
   }
   status = get_32_from_eeprom(EEPROM_ADDR, addr, (uint32_t*)&val_x);
   if (status != osOK) {
@@ -697,7 +701,11 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
       addr = channel_map[index].first_eeprom_addr + 3 * 8 + index * 8;
     }
   } else {
-    addr = channel_map[index].first_eeprom_addr + (index - 3) * 8;
+    if (pos < 32 || pos == 64) {
+      addr = channel_map[index].first_eeprom_addr + (index - 3) * 8;
+    } else {
+      addr = channel_map[index].first_eeprom_addr + 3 * 8 + (index - 3) * 8;
+    }
   }
   status = get_32_from_eeprom(EEPROM_ADDR, addr, (uint32_t*)&std_x);
   if (status != osOK) {
@@ -738,7 +746,7 @@ int8_t Get_Current_Switch_Channel(uint8_t switch_channel)
       addr = channel_map[index].second_eeprom_addr + 10 * 8;
     }
   } else {
-    if (pos < 32) {
+    if (pos < 64) {
       addr = channel_map[index].second_eeprom_addr + ((pos % 32 + 1) - channel_map[index].min_channel_num) * 8;
     } else {
       addr = channel_map[index].second_eeprom_addr + 10 * 8;
@@ -889,14 +897,10 @@ int8_t Clear_Switch_Dac(uint32_t switch_id)
 
 /* 
  *  switch_pos
- *      channel = 0
  *        0-31: C98 1-32
  *        32-63: C122 1-32
  *        64: C98 33
  *        65: C122 33
- *      channel = 1
- *        0-31: rx 1*32Switch 1 to 32
- *        32: rx 1*32Switch 1 to 33
  */
 int32_t Get_Index_Of_Channel_Map(uint8_t switch_channel, uint8_t switch_pos)
 {
@@ -912,9 +916,9 @@ int32_t Get_Index_Of_Channel_Map(uint8_t switch_channel, uint8_t switch_pos)
       act_pos = 0xFF;
     }
   } else {
-    if (switch_pos < 32) {
+    if (switch_pos < 64) {
       act_pos = (switch_pos % 32) + 1;
-    } else if (switch_pos < 33) {
+    } else if (switch_pos < 66) {
       act_pos = 33;
     } else {
       act_pos = 0xFF;
@@ -960,6 +964,11 @@ void Reset_Switch(uint8_t switch_channel)
       index = Get_Index_Of_Channel_Map(switch_channel, pos);
       Clear_Switch_Dac(channel_map[index].first_switch);
       Clear_Switch_Dac(channel_map[index].second_switch);
+      if (switch_channel == TX_SWITCH_CHANNEL) {
+        Set_Switch_Ready(TX_SWITCH_CHANNEL);
+      } else {
+        Set_Switch_Ready(RX_SWITCH_CHANNEL);
+      }
     }
 
     if (switch_channel == TX_SWITCH_CHANNEL) {
@@ -980,6 +989,8 @@ void Reset_Switch(uint8_t switch_channel)
     Clear_Switch_Dac(SWITCH_NUM_8);
     run_status.tx_switch_channel = 0xFF;
     run_status.rx_switch_channel = 0xFF;
+    Set_Switch_Ready(TX_SWITCH_CHANNEL);
+    Set_Switch_Ready(RX_SWITCH_CHANNEL);
   }
 }
 
@@ -1207,9 +1218,13 @@ uint8_t Disable_Tosa()
   if (run_status.tosa_C122) {
     status = RTOS_DAC128S085_C122_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
     status |= RTOS_DAC128S085_C122_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+    status |= RTOS_DAC128S085_C122_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+    status |= RTOS_DAC128S085_C122_Write(DAC128S085_TOSA_POWER_CHANNEL, 0, DAC128S085_MODE_NORMAL);
   } else {
     status = RTOS_DAC128S085_C98_Write(DAC128S085_TOSA_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
     status |= RTOS_DAC128S085_C98_Write(DAC128S085_TEC_SWITCH_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+    status |= RTOS_DAC128S085_C98_Write(DAC128S085_TEC_VALUE_CHANNEL, 0, DAC128S085_MODE_NORMAL);
+    status |= RTOS_DAC128S085_C98_Write(DAC128S085_TOSA_POWER_CHANNEL, 0, DAC128S085_MODE_NORMAL);
   }
 
   if (status != osOK) {
@@ -2203,7 +2218,7 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
       }
       break;
     case 0x10:
-      if (run_status.rx_switch_channel >= 32) {
+      if (run_status.rx_switch_channel >= 64) {
         BE32_To_Buffer(0x80000000, pBuf);
       } else {
         u_val8 = get_rx_pd_power(&u_val16, &d_val);
@@ -2236,7 +2251,7 @@ uint8_t Get_Performance(uint8_t per_id, uint8_t *pBuf)
       }
       break;
     case 0x12:
-      if (run_status.rx_switch_channel >= 32) {
+      if (run_status.rx_switch_channel >= 64) {
         BE32_To_Buffer(0x80000000, pBuf);
       } else {
         status = RTOS_EEPROM_Read(EEPROM_ADDR, EE_CAL_RX_IL + run_status.rx_switch_channel * 4 + 2, buf, 2);
@@ -2692,7 +2707,7 @@ uint8_t debug_cal_switch(uint8_t sw_num, uint32_t chan, int32_t val_x, int32_t v
       break;
     case SWITCH_NUM_5:
       addr = EE_CAL_SWITCH5;
-      chan_count = 3;
+      chan_count = 6;
       break;
     case SWITCH_NUM_6:
       addr = EE_CAL_SWITCH6;
@@ -2826,7 +2841,7 @@ uint8_t debug_cal_il(uint8_t num, int32_t val)
   osStatus status;
   uint16_t addr = EE_CAL_TX_IL;
 
-  if (num > 98 || num == 0) {
+  if (num > 130 || num == 0) {
     return RESPOND_FAILURE;
   }
 
@@ -2838,10 +2853,18 @@ uint8_t debug_cal_il(uint8_t num, int32_t val)
   return RESPOND_SUCCESS;
 }
 
-uint8_t debug_cal_default_temp(int32_t val)
+uint8_t debug_cal_default_temp(uint32_t which, int32_t val)
 {
   osStatus status;
-  uint16_t addr = EE_TEC_DEF_TEMP;
+  uint16_t addr;
+  
+  if (which == 0) {
+    addr = EE_TEC_DEF_TEMP_C98;
+  } else if (which == 1) {
+    addr = EE_TEC_DEF_TEMP_C122;
+  } else {
+    return RESPOND_FAILURE;
+  }
 
   status = write_32_to_eeprom(EEPROM_ADDR, addr, (uint32_t)val);
   if (status != osOK) {
@@ -2902,7 +2925,7 @@ uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len)
       addr = EE_CAL_SWITCH4;
       break;
     case 5: // Switch 5
-      len = 3 * 8;
+      len = 6 * 8;
       addr = EE_CAL_SWITCH5;
       break;
     case 6: // Switch 6
@@ -2948,8 +2971,8 @@ uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len)
       addr = EE_CAL_RX_PD_C98;
       break;
     case 16:
-      len = 4;
-      addr = EE_TEC_DEF_TEMP;
+      len = 8;
+      addr = EE_TEC_DEF_TEMP_C98;
       break;
     case 17: // Tosa
       len = 10 * 16;
@@ -2958,6 +2981,10 @@ uint8_t debug_cal_dump(uint32_t which, uint32_t *resp_len)
     case 18: // RX PD
       len = 8 * 10;
       addr = EE_CAL_RX_PD_C122;
+      break;
+    case 19: // RX IL
+      len = 32 * 4;
+      addr = EE_CAL_RX_IL + 32 * 4;
       break;
     default:
       *resp_len = 0;
@@ -3184,7 +3211,10 @@ uint8_t debug_set_lp(uint32_t which)
     switch_pos = 65;
   } else if (which == 2) {
     switch_channel = RX_SWITCH_CHANNEL;
-    switch_pos = 32;
+    switch_pos = 64;
+  } else if (which == 3) {
+    switch_channel = RX_SWITCH_CHANNEL;
+    switch_pos = 65;
   } else {
     return RESPOND_FAILURE;
   }
@@ -3208,7 +3238,7 @@ uint8_t debug_set_lp(uint32_t which)
 
   // Check
   if (Get_Current_Switch_Channel(switch_channel) != switch_pos) {
-    Reset_Switch(switch_channel);
+    Reset_Switch_Only(switch_channel);
     return RESPOND_FAILURE;
   }
 
@@ -3242,7 +3272,7 @@ uint8_t debug_get_switch_channel(uint8_t switch_channel)
     } else if (ret < 0) {
       resp_buf.buf[1] = 0xFF;
       return RESPOND_FAILURE;
-    } else if (ret >= 33) {
+    } else if (ret >= 66) {
       resp_buf.buf[1] = 0xFF;
       return RESPOND_INVALID_PARA;
     } else {
